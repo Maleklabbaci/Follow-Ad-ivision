@@ -1,24 +1,33 @@
 
 import React, { useMemo } from 'react';
-import { User, CampaignStats } from '../types';
+import { useParams } from 'react-router-dom';
+import { User, CampaignStats, Client, IntegrationSecret, UserRole } from '../types';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import ClientInsights from './ClientInsights';
 
 interface ClientDashboardProps {
   user: User;
   campaigns: CampaignStats[];
+  clients: Client[];
+  secrets: IntegrationSecret[];
 }
 
-const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns }) => {
-  // Enhanced filtering: Only show campaigns belonging to the client's account
+const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns, clients, secrets }) => {
+  const { clientId } = useParams<{ clientId?: string }>();
+
+  // Determine which client to show data for
+  // If user is ADMIN and clientId is in URL, use that. Otherwise use user.clientId (for CLIENTS)
+  const activeClientId = user.role === UserRole.ADMIN ? clientId : user.clientId;
+  
+  const activeClient = useMemo(() => {
+    return clients.find(c => c.id === activeClientId);
+  }, [clients, activeClientId]);
+
   const clientCampaigns = useMemo(() => {
-    // If no clientId, they shouldn't be here, but let's be safe
-    if (!user.clientId) return [];
-    
-    // In a real app, mapping would be strictly by IDs in DB
-    // For this prototype, we'll use name matching to differentiate our mock clients
-    const filterKeyword = user.name.toLowerCase().includes('bloom') ? 'bloom' : 'fitness';
-    return campaigns.filter(c => c.name.toLowerCase().includes(filterKeyword));
-  }, [campaigns, user]);
+    if (!activeClient) return [];
+    // Link campaigns by their campaignId list stored in the client object
+    return campaigns.filter(c => activeClient.campaignIds.includes(c.campaignId));
+  }, [campaigns, activeClient]);
 
   const totals = useMemo(() => {
     return clientCampaigns.reduce((acc, c) => ({
@@ -39,23 +48,26 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns }) =>
   ];
 
   const handleExport = () => {
-    alert("Preparing CSV export for your active campaigns...");
+    alert("Preparing CSV export for active campaigns...");
   };
 
-  const handleChangeRange = () => {
-    alert("Date range filtering is available in the Pro version.");
-  };
+  if (!activeClient && user.role === UserRole.ADMIN && clientId) {
+    return <div className="p-12 text-center text-slate-500">Client not found.</div>;
+  }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-10">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Performance Snapshot</h2>
-          <p className="text-slate-500 text-sm">Real-time data for {user.name}</p>
+          <p className="text-slate-500 text-sm">
+            {user.role === UserRole.ADMIN 
+              ? `Viewing results for ${activeClient?.name}` 
+              : `Real-time data for ${user.name}`}
+          </p>
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
           <button 
-            onClick={handleChangeRange}
             className="flex-1 sm:flex-none px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors"
           >
             Last 30 Days
@@ -97,6 +109,9 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns }) =>
         </div>
       </div>
 
+      {/* AI Strategy Insights Section */}
+      <ClientInsights user={activeClient ? { ...user, name: activeClient.name, clientId: activeClient.id } : user} campaigns={campaigns} secrets={secrets} />
+
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="p-6 border-b border-slate-100">
           <h3 className="text-lg font-semibold text-slate-800">Campaign Details</h3>
@@ -132,7 +147,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns }) =>
               ) : (
                 <tr>
                   <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
-                    No active campaigns found for this account.
+                    No linked campaigns found for this client configuration.
                   </td>
                 </tr>
               )}

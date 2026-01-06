@@ -76,7 +76,7 @@ const App: React.FC = () => {
       <Routes>
         <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login onLogin={handleLogin} />} />
         
-        <Route element={user ? <Layout user={user} onLogout={handleLogout} /> : <Navigate to="/login" replace />}>
+        <Route element={user ? <Layout user={user} onLogout={handleLogout} clients={clients} /> : <Navigate to="/login" replace />}>
           <Route path="/" element={user?.role === UserRole.ADMIN ? <AdminDashboard clients={clients} campaigns={campaigns} /> : <Navigate to="/client/dashboard" replace />} />
           
           {/* Admin Routes */}
@@ -85,8 +85,8 @@ const App: React.FC = () => {
           <Route path="/admin/sql-editor" element={<AdminSqlEditor clients={clients} campaigns={campaigns} secrets={secrets} />} />
           <Route path="/admin/settings" element={<AdminSettings secrets={secrets} setSecrets={setSecrets} />} />
           
-          {/* Client Routes */}
-          <Route path="/client/dashboard" element={<ClientDashboard user={user} campaigns={campaigns} />} />
+          {/* Client Routes - Support optional clientId for admin impersonation */}
+          <Route path="/client/dashboard/:clientId?" element={<ClientDashboard user={user} campaigns={campaigns} clients={clients} secrets={secrets} />} />
         </Route>
         
         <Route path="*" element={<Navigate to="/" replace />} />
