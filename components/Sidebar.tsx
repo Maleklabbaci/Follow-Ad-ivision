@@ -1,0 +1,104 @@
+
+import React from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import { User, UserRole } from '../types';
+
+interface SidebarProps {
+  user: User;
+  onLogout: () => void;
+}
+
+const Sidebar: React.FC<SidebarProps> = ({ user, onLogout }) => {
+  const location = useLocation();
+  const isAdmin = user.role === UserRole.ADMIN;
+
+  const NavLink = ({ to, label, icon }: { to: string, label: string, icon: React.ReactNode }) => {
+    const isActive = location.pathname === to;
+    return (
+      <Link
+        to={to}
+        className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+          isActive 
+          ? 'bg-blue-600 text-white font-medium shadow-sm' 
+          : 'text-slate-600 hover:bg-slate-100'
+        }`}
+      >
+        {icon}
+        <span>{label}</span>
+      </Link>
+    );
+  };
+
+  return (
+    <aside className="w-64 bg-white border-r border-slate-200 flex flex-col h-full hidden lg:flex">
+      <div className="p-6">
+        <div className="flex items-center gap-2 mb-8">
+          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+            <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+            </svg>
+          </div>
+          <span className="text-xl font-bold text-slate-900 tracking-tight">AdPulse AI</span>
+        </div>
+
+        <nav className="space-y-1">
+          {isAdmin ? (
+            <>
+              <div className="px-4 text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2 mt-4">Agency</div>
+              <NavLink to="/" label="Dashboard" icon={<DashboardIcon />} />
+              <NavLink to="/admin/clients" label="Clients" icon={<ClientsIcon />} />
+              <NavLink to="/admin/campaigns" label="Campaigns" icon={<AIIcon />} />
+              <NavLink to="/admin/settings" label="Settings" icon={<SettingsIcon />} />
+            </>
+          ) : (
+            <>
+              <div className="px-4 text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2 mt-4">Campaigns</div>
+              <NavLink to="/client/dashboard" label="Analytics" icon={<DashboardIcon />} />
+              <NavLink to="/client/insights" label="AI Insights" icon={<AIIcon />} />
+            </>
+          )}
+        </nav>
+      </div>
+
+      <div className="mt-auto p-6 border-t border-slate-100">
+        <button
+          onClick={onLogout}
+          className="flex items-center gap-3 px-4 py-3 w-full rounded-lg text-red-600 hover:bg-red-50 transition-colors font-medium"
+        >
+          <LogoutIcon />
+          <span>Logout</span>
+        </button>
+      </div>
+    </aside>
+  );
+};
+
+// Simple Icons
+const DashboardIcon = () => (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2v-4zM14 16a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2v-4z" />
+  </svg>
+);
+const ClientsIcon = () => (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+  </svg>
+);
+const SettingsIcon = () => (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+  </svg>
+);
+const AIIcon = () => (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+  </svg>
+);
+const LogoutIcon = () => (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+  </svg>
+);
+
+export default Sidebar;
