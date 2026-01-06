@@ -1,4 +1,3 @@
-
 export enum UserRole {
   ADMIN = 'ADMIN',
   CLIENT = 'CLIENT'
@@ -50,7 +49,7 @@ export interface CampaignStats {
 }
 
 export interface IntegrationSecret {
-  type: 'FACEBOOK' | 'AI' | 'DATABASE';
+  type: 'FACEBOOK' | 'DATABASE' | 'AI';
   value: string;
   updatedAt: string;
   status: 'VALID' | 'INVALID' | 'UNTESTED';

@@ -3,8 +3,9 @@ import { GoogleGenAI } from "@google/genai";
 import { CampaignStats } from "../types";
 
 export const getCampaignInsights = async (campaigns: CampaignStats[], customApiKey?: string): Promise<string> => {
-  // Priority: Custom API key from settings > process.env.API_KEY
-  const apiKey = customApiKey || process.env.API_KEY;
+  // Use custom API key if provided, otherwise try to get from global process.env if shimmed
+  const envKey = typeof process !== 'undefined' ? process.env.API_KEY : undefined;
+  const apiKey = customApiKey || envKey;
   
   if (!apiKey) {
     throw new Error("API Key is missing. Please configure it in Settings.");

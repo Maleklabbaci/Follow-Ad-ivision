@@ -38,7 +38,7 @@ const Sidebar: React.FC<SidebarProps> = ({ user, onLogout }) => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
             </svg>
           </div>
-          <span className="text-xl font-bold text-slate-900 tracking-tight">AdPulse AI</span>
+          <span className="text-xl font-bold text-slate-900 tracking-tight">AdPulse</span>
         </div>
 
         <nav className="space-y-1">
@@ -47,7 +47,7 @@ const Sidebar: React.FC<SidebarProps> = ({ user, onLogout }) => {
               <div className="px-4 text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2 mt-4">Agency</div>
               <NavLink to="/" label="Dashboard" icon={<DashboardIcon />} />
               <NavLink to="/admin/clients" label="Clients" icon={<ClientsIcon />} />
-              <NavLink to="/admin/campaigns" label="Campaigns" icon={<AIIcon />} />
+              <NavLink to="/admin/campaigns" label="Campaigns" icon={<CampaignsIcon />} />
               <div className="px-4 text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2 mt-4">Engineering</div>
               <NavLink to="/admin/sql-editor" label="Database" icon={<DatabaseIcon />} />
               <NavLink to="/admin/settings" label="Settings" icon={<SettingsIcon />} />
@@ -56,7 +56,6 @@ const Sidebar: React.FC<SidebarProps> = ({ user, onLogout }) => {
             <>
               <div className="px-4 text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2 mt-4">Campaigns</div>
               <NavLink to="/client/dashboard" label="Analytics" icon={<DashboardIcon />} />
-              <NavLink to="/client/insights" label="AI Insights" icon={<AIIcon />} />
             </>
           )}
         </nav>
@@ -91,9 +90,9 @@ const SettingsIcon = () => (
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
   </svg>
 );
-const AIIcon = () => (
+const CampaignsIcon = () => (
   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
   </svg>
 );
 const DatabaseIcon = () => (

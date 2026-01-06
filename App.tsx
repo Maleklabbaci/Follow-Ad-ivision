@@ -1,8 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { HashRouter, Routes, Route, Navigate, Link, useLocation, useNavigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { User, UserRole, Client, CampaignStats, IntegrationSecret } from './types';
-import Sidebar from './components/Sidebar';
 import Layout from './components/Layout';
 import AdminDashboard from './pages/AdminDashboard';
 import ClientDashboard from './pages/ClientDashboard';
@@ -10,7 +9,6 @@ import AdminClients from './pages/AdminClients';
 import AdminSettings from './pages/AdminSettings';
 import AdminCampaigns from './pages/AdminCampaigns';
 import AdminSqlEditor from './pages/AdminSqlEditor';
-import ClientInsights from './pages/ClientInsights';
 import Login from './pages/Login';
 
 // Mock DB Initial State
@@ -27,18 +25,33 @@ const MOCK_CAMPAIGNS: CampaignStats[] = [
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem('auth_user');
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const saved = localStorage.getItem('auth_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
   });
+
   const [clients, setClients] = useState<Client[]>(() => {
-    const saved = localStorage.getItem('app_clients');
-    return saved ? JSON.parse(saved) : MOCK_CLIENTS;
+    try {
+      const saved = localStorage.getItem('app_clients');
+      return saved ? JSON.parse(saved) : MOCK_CLIENTS;
+    } catch {
+      return MOCK_CLIENTS;
+    }
   });
+
   const [secrets, setSecrets] = useState<IntegrationSecret[]>(() => {
-    const saved = localStorage.getItem('app_secrets');
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem('app_secrets');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
   });
-  const [campaigns, setCampaigns] = useState<CampaignStats[]>(MOCK_CAMPAIGNS);
+
+  const [campaigns] = useState<CampaignStats[]>(MOCK_CAMPAIGNS);
 
   useEffect(() => {
     localStorage.setItem('app_clients', JSON.stringify(clients));
@@ -61,10 +74,10 @@ const App: React.FC = () => {
   return (
     <HashRouter>
       <Routes>
-        <Route path="/login" element={user ? <Navigate to="/" /> : <Login onLogin={handleLogin} />} />
+        <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login onLogin={handleLogin} />} />
         
-        <Route element={user ? <Layout user={user} onLogout={handleLogout} /> : <Navigate to="/login" />}>
-          <Route path="/" element={user?.role === UserRole.ADMIN ? <AdminDashboard clients={clients} campaigns={campaigns} /> : <Navigate to="/client/dashboard" />} />
+        <Route element={user ? <Layout user={user} onLogout={handleLogout} /> : <Navigate to="/login" replace />}>
+          <Route path="/" element={user?.role === UserRole.ADMIN ? <AdminDashboard clients={clients} campaigns={campaigns} /> : <Navigate to="/client/dashboard" replace />} />
           
           {/* Admin Routes */}
           <Route path="/admin/clients" element={<AdminClients clients={clients} setClients={setClients} secrets={secrets} />} />
@@ -74,10 +87,9 @@ const App: React.FC = () => {
           
           {/* Client Routes */}
           <Route path="/client/dashboard" element={<ClientDashboard user={user} campaigns={campaigns} />} />
-          <Route path="/client/insights" element={<ClientInsights user={user} campaigns={campaigns} secrets={secrets} />} />
         </Route>
         
-        <Route path="*" element={<Navigate to="/" />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </HashRouter>
   );

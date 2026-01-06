@@ -136,21 +136,7 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({ clients, campaigns }) =
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-blue-600 rounded-xl p-6 text-white shadow-lg shadow-blue-100">
-          <div className="flex items-center gap-4 mb-4">
-            <div className="p-3 bg-white/20 rounded-lg">
-              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-            </div>
-            <h3 className="text-lg font-bold">Campaign Health Tip</h3>
-          </div>
-          <p className="text-blue-50 opacity-90 text-sm leading-relaxed">
-            Your campaign <span className="font-bold underline">Spring Sale - Fitness</span> is currently performing 24% above the benchmark ROAS. Consider increasing budget for this specific tactic in the next allocation cycle.
-          </p>
-        </div>
-        
+      <div className="grid grid-cols-1 md:grid-cols-1 gap-6">
         <div className="bg-slate-900 rounded-xl p-6 text-white shadow-lg shadow-slate-200">
           <div className="flex items-center gap-4 mb-4">
             <div className="p-3 bg-white/10 rounded-lg">
