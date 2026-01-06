@@ -48,6 +48,8 @@ const Sidebar: React.FC<SidebarProps> = ({ user, onLogout }) => {
               <NavLink to="/" label="Dashboard" icon={<DashboardIcon />} />
               <NavLink to="/admin/clients" label="Clients" icon={<ClientsIcon />} />
               <NavLink to="/admin/campaigns" label="Campaigns" icon={<AIIcon />} />
+              <div className="px-4 text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2 mt-4">Engineering</div>
+              <NavLink to="/admin/sql-editor" label="Database" icon={<DatabaseIcon />} />
               <NavLink to="/admin/settings" label="Settings" icon={<SettingsIcon />} />
             </>
           ) : (
@@ -73,7 +75,6 @@ const Sidebar: React.FC<SidebarProps> = ({ user, onLogout }) => {
   );
 };
 
-// Simple Icons
 const DashboardIcon = () => (
   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2v-4zM14 16a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2v-4z" />
@@ -93,6 +94,11 @@ const SettingsIcon = () => (
 const AIIcon = () => (
   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+  </svg>
+);
+const DatabaseIcon = () => (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
   </svg>
 );
 const LogoutIcon = () => (

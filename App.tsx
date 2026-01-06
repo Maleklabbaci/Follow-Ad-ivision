@@ -9,6 +9,7 @@ import ClientDashboard from './pages/ClientDashboard';
 import AdminClients from './pages/AdminClients';
 import AdminSettings from './pages/AdminSettings';
 import AdminCampaigns from './pages/AdminCampaigns';
+import AdminSqlEditor from './pages/AdminSqlEditor';
 import ClientInsights from './pages/ClientInsights';
 import Login from './pages/Login';
 
@@ -68,6 +69,7 @@ const App: React.FC = () => {
           {/* Admin Routes */}
           <Route path="/admin/clients" element={<AdminClients clients={clients} setClients={setClients} secrets={secrets} />} />
           <Route path="/admin/campaigns" element={<AdminCampaigns clients={clients} campaigns={campaigns} />} />
+          <Route path="/admin/sql-editor" element={<AdminSqlEditor clients={clients} campaigns={campaigns} secrets={secrets} />} />
           <Route path="/admin/settings" element={<AdminSettings secrets={secrets} setSecrets={setSecrets} />} />
           
           {/* Client Routes */}

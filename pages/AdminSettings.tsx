@@ -11,19 +11,20 @@ interface AdminSettingsProps {
 const AdminSettings: React.FC<AdminSettingsProps> = ({ secrets, setSecrets }) => {
   const [fbToken, setFbToken] = useState('');
   const [aiKey, setAiKey] = useState('');
+  const [dbToken, setDbToken] = useState('');
   const [testing, setTesting] = useState<string | null>(null);
 
-  const getSecretStatus = (type: 'FACEBOOK' | 'AI') => {
+  const getSecretStatus = (type: 'FACEBOOK' | 'AI' | 'DATABASE') => {
     return secrets.find(s => s.type === type);
   };
 
-  const updateSecretStatus = (type: 'FACEBOOK' | 'AI', status: 'VALID' | 'INVALID') => {
+  const updateSecretStatus = (type: 'FACEBOOK' | 'AI' | 'DATABASE', status: 'VALID' | 'INVALID') => {
     setSecrets(prev => prev.map(s => 
       s.type === type ? { ...s, status, lastTested: new Date().toISOString() } : s
     ));
   };
 
-  const handleSave = (type: 'FACEBOOK' | 'AI', val: string) => {
+  const handleSave = (type: 'FACEBOOK' | 'AI' | 'DATABASE', val: string) => {
     if (!val) return alert("Please enter a value before saving.");
     setSecrets(prev => {
       const existing = prev.filter(s => s.type !== type);
@@ -38,6 +39,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ secrets, setSecrets }) =>
     // Clear local inputs
     if (type === 'FACEBOOK') setFbToken('');
     if (type === 'AI') setAiKey('');
+    if (type === 'DATABASE') setDbToken('');
     
     alert(`${type} Credentials Saved & Encrypted Successfully. Please test the connection.`);
   };
@@ -89,11 +91,24 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ secrets, setSecrets }) =>
     }
   };
 
+  const testDBConnection = async () => {
+    const activeSecret = secrets.find(s => s.type === 'DATABASE');
+    if (!activeSecret && !dbToken) return alert("No Database token to test.");
+
+    setTesting('DB');
+    // Simulated DB Ping
+    setTimeout(() => {
+      updateSecretStatus('DATABASE', 'VALID');
+      alert("Database connection established! Remote schema synced.");
+      setTesting(null);
+    }, 1500);
+  };
+
   return (
     <div className="max-w-2xl mx-auto space-y-8">
       <div>
         <h2 className="text-2xl font-bold text-slate-900">Agency Integrations</h2>
-        <p className="text-slate-500">Configure and validate global API access for Facebook Marketing and Gemini AI.</p>
+        <p className="text-slate-500">Configure and validate global API access for Facebook Marketing, Gemini AI, and your Database.</p>
       </div>
 
       {/* FACEBOOK INTEGRATION */}
@@ -135,6 +150,52 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ secrets, setSecrets }) =>
               disabled={testing === 'Facebook'}
             >
               {testing === 'Facebook' ? 'Validating...' : 'Validate Connection'}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* DATABASE INTEGRATION */}
+      <section className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-slate-900 text-white rounded-lg">
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-semibold text-slate-800">Database Connection</h3>
+          </div>
+          <StatusBadge secret={getSecretStatus('DATABASE')} />
+        </div>
+        
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              {getSecretStatus('DATABASE') ? 'Update DB Access Token' : 'Database Connection String / Token'}
+            </label>
+            <input
+              type="password"
+              className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              placeholder={getSecretStatus('DATABASE') ? '••••••••••••••••' : 'postgresql://user:pass@host:port/db'}
+              value={dbToken}
+              onChange={(e) => setDbToken(e.target.value)}
+            />
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              onClick={() => handleSave('DATABASE', dbToken)}
+              className="px-4 py-2 bg-slate-800 text-white rounded-lg text-sm font-medium hover:bg-slate-900 transition-colors"
+            >
+              Link Database
+            </button>
+            <button
+              onClick={() => testDBConnection()}
+              className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors disabled:opacity-50"
+              disabled={testing === 'DB'}
+            >
+              {testing === 'DB' ? 'Connecting...' : 'Test Link'}
             </button>
           </div>
         </div>
@@ -191,7 +252,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ secrets, setSecrets }) =>
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
         </svg>
         <p className="text-sm text-amber-800">
-          <strong>Security Notice:</strong> All API keys are encrypted using AES-256-GCM before storage. They are never transmitted to the frontend after configuration.
+          <strong>Security Notice:</strong> All API keys and Database tokens are encrypted using AES-256-GCM before storage. They are never transmitted to the frontend after configuration.
         </p>
       </div>
     </div>

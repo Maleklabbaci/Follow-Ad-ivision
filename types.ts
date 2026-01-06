@@ -50,7 +50,7 @@ export interface CampaignStats {
 }
 
 export interface IntegrationSecret {
-  type: 'FACEBOOK' | 'AI';
+  type: 'FACEBOOK' | 'AI' | 'DATABASE';
   value: string;
   updatedAt: string;
   status: 'VALID' | 'INVALID' | 'UNTESTED';
