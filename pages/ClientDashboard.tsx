@@ -1,5 +1,4 @@
-
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { User, CampaignStats, Client, IntegrationSecret, UserRole } from '../types';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -14,9 +13,8 @@ interface ClientDashboardProps {
 
 const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns, clients, secrets }) => {
   const { clientId } = useParams<{ clientId?: string }>();
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
 
-  // Determine which client to show data for
-  // If user is ADMIN and clientId is in URL, use that. Otherwise use user.clientId (for CLIENTS)
   const activeClientId = user.role === UserRole.ADMIN ? clientId : user.clientId;
   
   const activeClient = useMemo(() => {
@@ -25,71 +23,74 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns, clie
 
   const clientCampaigns = useMemo(() => {
     if (!activeClient) return [];
-    // Link campaigns by their campaignId list stored in the client object
     return campaigns.filter(c => activeClient.campaignIds.includes(c.campaignId));
   }, [campaigns, activeClient]);
+
+  // Déclencher un effet visuel à chaque mise à jour des campagnes
+  useEffect(() => {
+    setLastUpdate(new Date());
+  }, [campaigns]);
 
   const totals = useMemo(() => {
     return clientCampaigns.reduce((acc, c) => ({
       spend: acc.spend + c.spend,
       conv: acc.conv + c.conversions,
       roas: acc.roas + c.roas,
-      clicks: acc.clicks + c.clicks
-    }), { spend: 0, conv: 0, roas: 0, clicks: 0 });
+      clicks: acc.clicks + c.clicks,
+      impressions: acc.impressions + c.impressions
+    }), { spend: 0, conv: 0, roas: 0, clicks: 0, impressions: 0 });
   }, [clientCampaigns]);
 
   const avgRoas = clientCampaigns.length ? (totals.roas / clientCampaigns.length).toFixed(2) : '0.00';
+  const globalCtr = totals.impressions > 0 ? (totals.clicks / totals.impressions * 100).toFixed(2) : '0.00';
 
   const chartData = [
     { name: 'Week 1', spend: 240, conv: 12 },
     { name: 'Week 2', spend: 480, conv: 25 },
     { name: 'Week 3', spend: 320, conv: 18 },
-    { name: 'Week 4', spend: 560, conv: 32 },
+    { name: 'Week 4', spend: totals.spend / 4, conv: totals.conv / 4 },
   ];
 
-  const handleExport = () => {
-    alert("Preparing CSV export for active campaigns...");
-  };
-
   if (!activeClient && user.role === UserRole.ADMIN && clientId) {
-    return <div className="p-12 text-center text-slate-500">Client not found.</div>;
+    return <div className="p-12 text-center text-slate-500 font-medium">Client introuvable dans le portefeuille.</div>;
   }
 
   return (
     <div className="space-y-10">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900">Performance Snapshot</h2>
-          <p className="text-slate-500 text-sm">
-            {user.role === UserRole.ADMIN 
-              ? `Viewing results for ${activeClient?.name}` 
-              : `Real-time data for ${user.name}`}
+          <div className="flex items-center gap-3">
+            <h2 className="text-2xl font-bold text-slate-900">Tableau de bord de performance</h2>
+            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded-full text-[10px] font-bold border border-emerald-100 animate-pulse">
+              <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div>
+              LIVE DATA
+            </div>
+          </div>
+          <p className="text-slate-500 text-sm flex items-center gap-1">
+            Dernière actualisation : {lastUpdate.toLocaleTimeString()} 
+            <span className="text-slate-300">•</span> 
+            {activeClient?.name}
           </p>
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
-          <button 
-            className="flex-1 sm:flex-none px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors"
-          >
-            Last 30 Days
+          <button className="flex-1 sm:flex-none px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors">
+            30 derniers jours
           </button>
-          <button 
-            onClick={handleExport}
-            className="flex-1 sm:flex-none px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm"
-          >
-            Export Report
+          <button className="flex-1 sm:flex-none px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm">
+            Exporter Rapport
           </button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KPIBox label="Total Spend" value={`$${totals.spend.toFixed(2)}`} icon={<DollarIcon />} color="blue" />
+        <KPIBox label="Dépenses Totales" value={`$${totals.spend.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={<DollarIcon />} color="blue" />
         <KPIBox label="Conversions" value={totals.conv.toString()} icon={<CartIcon />} color="emerald" />
-        <KPIBox label="Avg ROAS" value={`${avgRoas}x`} icon={<TrendIcon />} color="indigo" />
-        <KPIBox label="Total Clicks" value={totals.clicks.toString()} icon={<PointerIcon />} color="amber" />
+        <KPIBox label="ROAS Moyen" value={`${avgRoas}x`} icon={<TrendIcon />} color="indigo" />
+        <KPIBox label="CTR Global" value={`${globalCtr}%`} icon={<PointerIcon />} color="amber" />
       </div>
 
       <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-        <h3 className="text-lg font-semibold mb-4 text-slate-800">Conversion Performance</h3>
+        <h3 className="text-lg font-semibold mb-4 text-slate-800">Évolution des Conversions</h3>
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={chartData}>
@@ -109,20 +110,21 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns, clie
         </div>
       </div>
 
-      {/* AI Strategy Insights Section */}
-      <ClientInsights user={activeClient ? { ...user, name: activeClient.name, clientId: activeClient.id } : user} campaigns={campaigns} secrets={secrets} />
+      <ClientInsights user={activeClient ? { ...user, name: activeClient.name, clientId: activeClient.id } : user} campaigns={campaigns} />
 
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-slate-100">
-          <h3 className="text-lg font-semibold text-slate-800">Campaign Details</h3>
+        <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+          <h3 className="text-lg font-semibold text-slate-800">Détails des Campagnes</h3>
+          <span className="text-xs text-slate-400 font-mono">Calculs basés sur Meta API v19.0</span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead className="bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wider">
               <tr>
-                <th className="px-6 py-4">Campaign Name</th>
-                <th className="px-6 py-4">Status</th>
-                <th className="px-6 py-4 text-right">Spend</th>
+                <th className="px-6 py-4">Nom de la Campagne</th>
+                <th className="px-6 py-4">Statut</th>
+                <th className="px-6 py-4 text-right">Dépenses</th>
+                <th className="px-6 py-4 text-right">Clicks</th>
                 <th className="px-6 py-4 text-right">Conv.</th>
                 <th className="px-6 py-4 text-right">ROAS</th>
                 <th className="px-6 py-4 text-right">CTR</th>
@@ -131,7 +133,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns, clie
             <tbody className="divide-y divide-slate-100">
               {clientCampaigns.length > 0 ? (
                 clientCampaigns.map(cp => (
-                  <tr key={cp.id} className="hover:bg-slate-50 transition-colors">
+                  <tr key={cp.id} className="hover:bg-slate-50 transition-colors group">
                     <td className="px-6 py-4 font-medium text-slate-900">{cp.name}</td>
                     <td className="px-6 py-4">
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${cp.status === 'ACTIVE' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'}`}>
@@ -139,15 +141,16 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns, clie
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right font-medium text-slate-900">${cp.spend.toFixed(2)}</td>
-                    <td className="px-6 py-4 text-right text-slate-600">{cp.conversions}</td>
+                    <td className="px-6 py-4 text-right text-slate-600">{cp.clicks}</td>
+                    <td className="px-6 py-4 text-right text-slate-900 font-semibold">{cp.conversions}</td>
                     <td className="px-6 py-4 text-right text-indigo-600 font-bold">{cp.roas.toFixed(2)}x</td>
-                    <td className="px-6 py-4 text-right text-slate-600">{(cp.ctr * 100).toFixed(2)}%</td>
+                    <td className="px-6 py-4 text-right text-slate-500">{(cp.ctr * 100).toFixed(2)}%</td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
-                    No linked campaigns found for this client configuration.
+                  <td colSpan={7} className="px-6 py-12 text-center text-slate-500">
+                    Aucune campagne liée trouvée pour ce client.
                   </td>
                 </tr>
               )}
@@ -161,19 +164,19 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns, clie
 
 const KPIBox = ({ label, value, icon, color }: { label: string, value: string, icon: any, color: string }) => {
   const colorClasses: Record<string, string> = {
-    blue: 'bg-blue-50 text-blue-600',
-    emerald: 'bg-emerald-50 text-emerald-600',
-    indigo: 'bg-indigo-50 text-indigo-600',
-    amber: 'bg-amber-50 text-amber-600',
+    blue: 'bg-blue-50 text-blue-600 border-blue-100',
+    emerald: 'bg-emerald-50 text-emerald-600 border-emerald-100',
+    indigo: 'bg-indigo-50 text-indigo-600 border-indigo-100',
+    amber: 'bg-amber-50 text-amber-600 border-amber-100',
   };
   return (
-    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
-      <div className={`p-3 rounded-lg ${colorClasses[color]}`}>
+    <div className={`bg-white p-5 rounded-xl border ${colorClasses[color]} shadow-sm flex items-center gap-4 transition-all hover:shadow-md`}>
+      <div className={`p-3 rounded-lg ${colorClasses[color].split(' ')[0]} ${colorClasses[color].split(' ')[1]}`}>
         {icon}
       </div>
       <div>
         <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{label}</p>
-        <p className="text-xl font-bold text-slate-900">{value}</p>
+        <p className="text-xl font-bold text-slate-900 tabular-nums">{value}</p>
       </div>
     </div>
   );
