@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { User, CampaignStats, Client, IntegrationSecret, UserRole } from '../types';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, Line, Bar } from 'recharts';
 import ClientInsights from './ClientInsights';
 
 interface ClientDashboardProps {
@@ -26,7 +26,6 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns, clie
     return campaigns.filter(c => activeClient.campaignIds.includes(c.campaignId));
   }, [campaigns, activeClient]);
 
-  // Déclencher un effet visuel à chaque mise à jour des campagnes
   useEffect(() => {
     setLastUpdate(new Date());
   }, [campaigns]);
@@ -43,117 +42,126 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns, clie
 
   const avgRoas = clientCampaigns.length ? (totals.roas / clientCampaigns.length).toFixed(2) : '0.00';
   const globalCtr = totals.impressions > 0 ? (totals.clicks / totals.impressions * 100).toFixed(2) : '0.00';
+  const globalCpc = totals.clicks > 0 ? (totals.spend / totals.clicks).toFixed(2) : '0.00';
 
-  const chartData = [
-    { name: 'Week 1', spend: 240, conv: 12 },
-    { name: 'Week 2', spend: 480, conv: 25 },
-    { name: 'Week 3', spend: 320, conv: 18 },
-    { name: 'Week 4', spend: totals.spend / 4, conv: totals.conv / 4 },
-  ];
+  // Simulation de données historiques basées sur les totaux actuels pour le graphique
+  const chartData = useMemo(() => [
+    { name: 'S-3', spend: totals.spend * 0.2, conv: Math.floor(totals.conv * 0.18) },
+    { name: 'S-2', spend: totals.spend * 0.25, conv: Math.floor(totals.conv * 0.22) },
+    { name: 'S-1', spend: totals.spend * 0.28, conv: Math.floor(totals.conv * 0.26) },
+    { name: 'Now', spend: totals.spend * 0.32, conv: Math.floor(totals.conv * 0.34) },
+  ], [totals]);
 
   if (!activeClient && user.role === UserRole.ADMIN && clientId) {
-    return <div className="p-12 text-center text-slate-500 font-medium">Client introuvable dans le portefeuille.</div>;
+    return (
+      <div className="p-20 flex flex-col items-center justify-center text-slate-400 space-y-4">
+        <svg className="w-16 h-16 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 9.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+        <p className="text-xl font-bold">Client introuvable</p>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-10">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div className="space-y-8 max-w-[1600px] mx-auto pb-12">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <h2 className="text-2xl font-bold text-slate-900">Tableau de bord de performance</h2>
-            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded-full text-[10px] font-bold border border-emerald-100 animate-pulse">
-              <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div>
-              LIVE DATA
+            <h2 className="text-3xl font-black text-slate-900 tracking-tight">{activeClient?.name}</h2>
+            <div className="flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-[10px] font-black border border-blue-100 shadow-sm">
+              <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-ping"></span>
+              COMPTE ACTIF
             </div>
           </div>
-          <p className="text-slate-500 text-sm flex items-center gap-1">
-            Dernière actualisation : {lastUpdate.toLocaleTimeString()} 
-            <span className="text-slate-300">•</span> 
-            {activeClient?.name}
+          <p className="text-slate-500 text-sm mt-1">
+            Analyse consolidée des comptes publicitaires Meta • Mis à jour à {lastUpdate.toLocaleTimeString()}
           </p>
         </div>
-        <div className="flex gap-2 w-full sm:w-auto">
-          <button className="flex-1 sm:flex-none px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors">
-            30 derniers jours
+        <div className="flex gap-2 w-full md:w-auto">
+          <button className="flex-1 md:flex-none px-5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm">
+            Février 2024
           </button>
-          <button className="flex-1 sm:flex-none px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm">
-            Exporter Rapport
+          <button className="flex-1 md:flex-none px-5 py-2.5 bg-slate-900 text-white rounded-xl text-sm font-bold hover:bg-black transition-all shadow-lg">
+            Télécharger Report
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KPIBox label="Dépenses Totales" value={`$${totals.spend.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={<DollarIcon />} color="blue" />
-        <KPIBox label="Conversions" value={totals.conv.toString()} icon={<CartIcon />} color="emerald" />
-        <KPIBox label="ROAS Moyen" value={`${avgRoas}x`} icon={<TrendIcon />} color="indigo" />
-        <KPIBox label="CTR Global" value={`${globalCtr}%`} icon={<PointerIcon />} color="amber" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <KPIBox label="Investissement" value={`$${totals.spend.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} detail="Total Ad Spend" color="blue" />
+        <KPIBox label="Résultats" value={totals.conv.toString()} detail="Conversions Web" color="emerald" />
+        <KPIBox label="Rentabilité (ROAS)" value={`${avgRoas}x`} detail="Retour sur investissement" color="indigo" />
+        <KPIBox label="Coût par Clic" value={`$${globalCpc}`} detail="Moyenne globale CPC" color="amber" />
       </div>
 
-      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-        <h3 className="text-lg font-semibold mb-4 text-slate-800">Évolution des Conversions</h3>
-        <div className="h-80">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData}>
-              <defs>
-                <linearGradient id="colorConv" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/>
-                  <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
-              <Area type="monotone" dataKey="conv" stroke="#10b981" fillOpacity={1} fill="url(#colorConv)" strokeWidth={3} />
-            </AreaChart>
-          </ResponsiveContainer>
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className="xl:col-span-2 bg-white p-8 rounded-2xl border border-slate-200 shadow-sm">
+          <div className="flex justify-between items-center mb-8">
+            <h3 className="text-xl font-bold text-slate-800">Tendances Performance</h3>
+            <div className="flex gap-4">
+               <div className="flex items-center gap-2">
+                 <div className="w-3 h-3 bg-blue-600 rounded-full"></div>
+                 <span className="text-xs font-bold text-slate-400">Dépenses</span>
+               </div>
+               <div className="flex items-center gap-2">
+                 <div className="w-3 h-3 bg-emerald-500 rounded-full"></div>
+                 <span className="text-xs font-bold text-slate-400">Conversions</span>
+               </div>
+            </div>
+          </div>
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fontWeight: 500, fill: '#94a3b8' }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fontWeight: 500, fill: '#94a3b8' }} />
+                <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }} />
+                <Bar dataKey="spend" fill="#2563eb" radius={[6, 6, 0, 0]} barSize={40} />
+                <Line type="monotone" dataKey="conv" stroke="#10b981" strokeWidth={4} dot={{ r: 6, fill: '#10b981', strokeWidth: 2, stroke: '#fff' }} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+        
+        <div className="xl:col-span-1">
+           <ClientInsights user={activeClient ? { ...user, name: activeClient.name, clientId: activeClient.id } : user} campaigns={campaigns} />
         </div>
       </div>
 
-      <ClientInsights user={activeClient ? { ...user, name: activeClient.name, clientId: activeClient.id } : user} campaigns={campaigns} />
-
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-          <h3 className="text-lg font-semibold text-slate-800">Détails des Campagnes</h3>
-          <span className="text-xs text-slate-400 font-mono">Calculs basés sur Meta API v19.0</span>
+          <h3 className="text-xl font-bold text-slate-800">Performance par Campagne</h3>
+          <div className="px-3 py-1 bg-slate-50 border border-slate-100 rounded-lg text-[10px] font-black text-slate-400">META API v19.0</div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
-            <thead className="bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+            <thead className="bg-slate-50/50 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
               <tr>
                 <th className="px-6 py-4">Nom de la Campagne</th>
-                <th className="px-6 py-4">Statut</th>
-                <th className="px-6 py-4 text-right">Dépenses</th>
-                <th className="px-6 py-4 text-right">Clicks</th>
+                <th className="px-6 py-4">Status</th>
+                <th className="px-6 py-4 text-right">Spend</th>
                 <th className="px-6 py-4 text-right">Conv.</th>
                 <th className="px-6 py-4 text-right">ROAS</th>
                 <th className="px-6 py-4 text-right">CTR</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {clientCampaigns.length > 0 ? (
-                clientCampaigns.map(cp => (
-                  <tr key={cp.id} className="hover:bg-slate-50 transition-colors group">
-                    <td className="px-6 py-4 font-medium text-slate-900">{cp.name}</td>
-                    <td className="px-6 py-4">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${cp.status === 'ACTIVE' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'}`}>
-                        {cp.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-right font-medium text-slate-900">${cp.spend.toFixed(2)}</td>
-                    <td className="px-6 py-4 text-right text-slate-600">{cp.clicks}</td>
-                    <td className="px-6 py-4 text-right text-slate-900 font-semibold">{cp.conversions}</td>
-                    <td className="px-6 py-4 text-right text-indigo-600 font-bold">{cp.roas.toFixed(2)}x</td>
-                    <td className="px-6 py-4 text-right text-slate-500">{(cp.ctr * 100).toFixed(2)}%</td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-slate-500">
-                    Aucune campagne liée trouvée pour ce client.
+              {clientCampaigns.map(cp => (
+                <tr key={cp.id} className="hover:bg-slate-50 transition-colors group">
+                  <td className="px-6 py-5">
+                    <div className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors">{cp.name}</div>
+                    <div className="text-[10px] text-slate-400 font-mono mt-0.5">{cp.campaignId}</div>
                   </td>
+                  <td className="px-6 py-5">
+                    <span className={`px-2 py-1 rounded-md text-[10px] font-black uppercase border ${cp.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                      {cp.status}
+                    </span>
+                  </td>
+                  <td className="px-6 py-5 text-right font-semibold text-slate-900">${cp.spend.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                  <td className="px-6 py-5 text-right text-slate-900 font-bold">{cp.conversions}</td>
+                  <td className={`px-6 py-5 text-right font-black ${cp.roas > 5 ? 'text-emerald-600' : 'text-indigo-600'}`}>{cp.roas.toFixed(2)}x</td>
+                  <td className="px-6 py-5 text-right text-slate-500 font-medium">{(cp.ctr * 100).toFixed(2)}%</td>
                 </tr>
-              )}
+              ))}
             </tbody>
           </table>
         </div>
@@ -162,45 +170,20 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns, clie
   );
 };
 
-const KPIBox = ({ label, value, icon, color }: { label: string, value: string, icon: any, color: string }) => {
-  const colorClasses: Record<string, string> = {
-    blue: 'bg-blue-50 text-blue-600 border-blue-100',
-    emerald: 'bg-emerald-50 text-emerald-600 border-emerald-100',
-    indigo: 'bg-indigo-50 text-indigo-600 border-indigo-100',
-    amber: 'bg-amber-50 text-amber-600 border-amber-100',
+const KPIBox = ({ label, value, detail, color }: { label: string, value: string, detail: string, color: string }) => {
+  const styles: Record<string, string> = {
+    blue: 'bg-blue-600 text-white shadow-blue-100',
+    emerald: 'bg-white border-slate-200 text-slate-900',
+    indigo: 'bg-indigo-600 text-white shadow-indigo-100',
+    amber: 'bg-white border-slate-200 text-slate-900',
   };
   return (
-    <div className={`bg-white p-5 rounded-xl border ${colorClasses[color]} shadow-sm flex items-center gap-4 transition-all hover:shadow-md`}>
-      <div className={`p-3 rounded-lg ${colorClasses[color].split(' ')[0]} ${colorClasses[color].split(' ')[1]}`}>
-        {icon}
-      </div>
-      <div>
-        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{label}</p>
-        <p className="text-xl font-bold text-slate-900 tabular-nums">{value}</p>
-      </div>
+    <div className={`p-6 rounded-2xl shadow-sm border transition-all hover:scale-[1.02] ${styles[color]}`}>
+      <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${color === 'blue' || color === 'indigo' ? 'text-white/70' : 'text-slate-400'}`}>{label}</p>
+      <p className="text-3xl font-black tabular-nums">{value}</p>
+      <p className={`text-[10px] font-bold mt-2 ${color === 'blue' || color === 'indigo' ? 'text-white/60' : 'text-slate-400'}`}>{detail}</p>
     </div>
   );
 };
-
-const DollarIcon = () => (
-  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-  </svg>
-);
-const CartIcon = () => (
-  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-  </svg>
-);
-const TrendIcon = () => (
-  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-  </svg>
-);
-const PointerIcon = () => (
-  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5" />
-  </svg>
-);
 
 export default ClientDashboard;

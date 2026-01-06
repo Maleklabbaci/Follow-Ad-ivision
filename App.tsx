@@ -19,11 +19,10 @@ const App: React.FC = () => {
   const [clients, setClients] = useState<Client[]>(() => {
     const saved = localStorage.getItem('app_clients');
     const parsed = saved ? JSON.parse(saved) : [];
-    // Données par défaut si vide pour la démo
     if (parsed.length === 0) {
       return [
-        { id: 'c1', name: 'Elite Fitness', email: 'contact@fitness.com', createdAt: '2024-01-01', adAccounts: ['act_123'], campaignIds: ['cp_1', 'cp_2'] },
-        { id: 'c2', name: 'Bloom Boutique', email: 'client@bloom.com', createdAt: '2024-02-15', adAccounts: ['act_456'], campaignIds: ['cp_3'] }
+        { id: 'c1', name: 'Elite Fitness Pro', email: 'contact@fitness.com', createdAt: '2024-01-01', adAccounts: ['act_123'], campaignIds: ['cp_1', 'cp_2'] },
+        { id: 'c2', name: 'Bloom Boutique', email: 'client@bloom.com', createdAt: '2024-02-15', adAccounts: ['act_456'], campaignIds: ['cp_3', 'cp_4'] }
       ];
     }
     return parsed;
@@ -39,58 +38,57 @@ const App: React.FC = () => {
     const parsed = saved ? JSON.parse(saved) : [];
     if (parsed.length === 0) {
       return [
-        { id: '1', campaignId: 'cp_1', name: 'Spring Promo', date: '2024-05-01', spend: 1200, impressions: 50000, clicks: 1200, conversions: 45, ctr: 0.024, cpc: 1.0, roas: 3.5, status: 'ACTIVE', dataSource: 'MOCK' },
-        { id: '2', campaignId: 'cp_2', name: 'Retargeting High-Value', date: '2024-05-01', spend: 800, impressions: 20000, clicks: 950, conversions: 32, ctr: 0.0475, cpc: 0.84, roas: 4.2, status: 'ACTIVE', dataSource: 'MOCK' },
-        { id: '3', campaignId: 'cp_3', name: 'Brand Awareness Bloom', date: '2024-05-01', spend: 500, impressions: 100000, clicks: 800, conversions: 12, ctr: 0.008, cpc: 0.62, roas: 1.5, status: 'ACTIVE', dataSource: 'MOCK' }
+        { id: '1', campaignId: 'cp_1', name: 'Performance Max - Leads', date: '2024-05-01', spend: 4520.50, impressions: 154000, clicks: 3200, conversions: 124, ctr: 0.0207, cpc: 1.41, roas: 5.48, status: 'ACTIVE', dataSource: 'MOCK' },
+        { id: '2', campaignId: 'cp_2', name: 'Retargeting - Abandoned Cart', date: '2024-05-01', spend: 1240.20, impressions: 45000, clicks: 1150, conversions: 89, ctr: 0.0255, cpc: 1.07, roas: 7.17, status: 'ACTIVE', dataSource: 'MOCK' },
+        { id: '3', campaignId: 'cp_3', name: 'Collection Ad - New Arrival', date: '2024-05-01', spend: 2850.00, impressions: 210000, clicks: 5400, conversions: 65, ctr: 0.0257, cpc: 0.52, roas: 2.28, status: 'ACTIVE', dataSource: 'MOCK' },
+        { id: '4', campaignId: 'cp_4', name: 'Brand Awareness - Lifestyle', date: '2024-05-01', spend: 850.00, impressions: 500000, clicks: 1200, conversions: 8, ctr: 0.0024, cpc: 0.70, roas: 0.94, status: 'ACTIVE', dataSource: 'MOCK' }
       ];
     }
     return parsed;
   });
 
-  const [isPulseActive, setIsPulseActive] = useState(true);
-
-  // Fonction de calcul des KPIs marketing réels
   const calculateDerivedStats = useCallback((stats: Partial<CampaignStats>): CampaignStats => {
     const spend = stats.spend || 0;
     const clicks = stats.clicks || 0;
     const conversions = stats.conversions || 0;
     const impressions = stats.impressions || 0;
     
+    // Valeur moyenne d'une conversion (AOV) estimée à 200€ pour le calcul du ROAS
+    const aov = 200; 
+
     return {
       ...(stats as CampaignStats),
-      ctr: impressions > 0 ? clicks / impressions : 0,
-      cpc: clicks > 0 ? spend / clicks : 0,
-      roas: spend > 0 ? (conversions * 45) / spend : 0, // 45€ de panier moyen simulé
+      ctr: impressions > 0 ? (clicks / impressions) : 0,
+      cpc: clicks > 0 ? (spend / clicks) : 0,
+      roas: spend > 0 ? (conversions * aov) / spend : 0,
       lastSync: new Date().toISOString()
     };
   }, []);
 
-  // Effet de rechargement/pulse automatique pour simuler le temps réel
   useEffect(() => {
-    if (!isPulseActive) return;
-
     const interval = setInterval(() => {
       setCampaigns(prev => prev.map(cp => {
         if (cp.status !== 'ACTIVE') return cp;
         
-        // Simulation de trafic incrémental (vrais calculs basés sur progression)
-        const newImpressions = cp.impressions + Math.floor(Math.random() * 50);
-        const newClicks = cp.clicks + (Math.random() > 0.7 ? 1 : 0);
-        const newConversions = cp.conversions + (Math.random() > 0.95 ? 1 : 0);
-        const newSpend = cp.spend + (Math.random() * 0.5);
+        // Simulation de progression organique
+        const rand = Math.random();
+        const addedImpressions = Math.floor(rand * 150);
+        const addedClicks = rand > 0.8 ? Math.floor(rand * 5) : 0;
+        const addedConversions = rand > 0.97 ? 1 : 0;
+        const addedSpend = addedClicks * (cp.cpc || 1.2) * (0.9 + Math.random() * 0.2);
 
         return calculateDerivedStats({
           ...cp,
-          impressions: newImpressions,
-          clicks: newClicks,
-          conversions: newConversions,
-          spend: newSpend
+          impressions: cp.impressions + addedImpressions,
+          clicks: cp.clicks + addedClicks,
+          conversions: cp.conversions + addedConversions,
+          spend: cp.spend + addedSpend
         });
       }));
-    }, 5000); // Pulse toutes les 5 secondes
+    }, 3000); 
 
     return () => clearInterval(interval);
-  }, [isPulseActive, calculateDerivedStats]);
+  }, [calculateDerivedStats]);
 
   useEffect(() => {
     localStorage.setItem('app_clients', JSON.stringify(clients));
