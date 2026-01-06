@@ -1,8 +1,6 @@
-
 import React, { useState } from 'react';
 import { User, CampaignStats, IntegrationSecret } from '../types';
 import { getCampaignInsights } from '../services/geminiService';
-import { decryptSecret } from '../services/cryptoService';
 
 interface ClientInsightsProps {
   user: User;
@@ -23,27 +21,14 @@ const ClientInsights: React.FC<ClientInsightsProps> = ({ user, campaigns, secret
   };
 
   const handleGenerate = async () => {
-    const aiSecret = secrets.find(s => s.type === 'AI');
-    
-    if (!aiSecret) {
-      alert("AI Analysis is not configured. Please contact the agency admin.");
-      return;
-    }
-
-    if (aiSecret.status === 'INVALID') {
-      alert("AI Model configuration is currently invalid. Please contact the agency admin.");
-      return;
-    }
-
     setLoading(true);
     try {
-      const customKey = await decryptSecret(aiSecret.value);
-      
       const clientCampaigns = campaigns.filter(c => 
         user.name.toLowerCase().includes('bloom') ? c.name.toLowerCase().includes('bloom') : c.name.toLowerCase().includes('fitness')
       );
       
-      const result = await getCampaignInsights(clientCampaigns, customKey);
+      // The service now handles process.env.API_KEY internally
+      const result = await getCampaignInsights(clientCampaigns);
       setInsights(result);
     } catch (err: any) {
       alert(`Error generating insights: ${err.message}`);
@@ -62,7 +47,7 @@ const ClientInsights: React.FC<ClientInsightsProps> = ({ user, campaigns, secret
             </svg>
             AI Strategy Advisor
           </h2>
-          <p className="text-slate-500">Automated performance analysis and budget recommendations.</p>
+          <p className="text-slate-500">Automated performance analysis using Gemini 3 Pro reasoning.</p>
         </div>
         <button
           onClick={handleGenerate}
@@ -75,7 +60,7 @@ const ClientInsights: React.FC<ClientInsightsProps> = ({ user, campaigns, secret
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
-              Analyzing Campaigns...
+              Analyzing Performance...
             </>
           ) : (
             'Analyze Performance'

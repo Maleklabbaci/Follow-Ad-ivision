@@ -1,3 +1,4 @@
+
 export enum UserRole {
   ADMIN = 'ADMIN',
   CLIENT = 'CLIENT'
@@ -29,8 +30,8 @@ export interface Client {
   name: string;
   email: string;
   createdAt: string;
-  adAccounts: string[]; // Stores adAccount IDs
-  campaignIds: string[]; // Stores specific linked campaign IDs
+  adAccounts: string[]; 
+  campaignIds: string[]; 
 }
 
 export interface CampaignStats {
@@ -46,6 +47,8 @@ export interface CampaignStats {
   cpc: number;
   roas: number;
   status: 'ACTIVE' | 'PAUSED' | 'ARCHIVED';
+  lastSync?: string;
+  dataSource: 'MOCK' | 'META_API';
 }
 
 export interface IntegrationSecret {
