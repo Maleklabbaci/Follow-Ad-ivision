@@ -48,7 +48,7 @@ export interface CampaignStats {
   roas: number;
   status: 'ACTIVE' | 'PAUSED' | 'ARCHIVED';
   lastSync?: string;
-  dataSource: 'MOCK' | 'META_API';
+  dataSource: 'MOCK' | 'REAL_API';
 }
 
 export interface IntegrationSecret {

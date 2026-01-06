@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { User, UserRole } from '../types';
 
@@ -14,6 +15,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     e.preventDefault();
     setLoading(true);
     
+    // Simple mock authentication logic
     setTimeout(() => {
       setLoading(false);
       if (email === 'admin@agency.com') {
@@ -28,7 +30,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-100 px-4">
-      <div className="max-w-md w-full bg-white p-8 rounded-2xl shadow-xl space-y-8 animate-in fade-in duration-500">
+      <div className="max-w-md w-full bg-white p-8 rounded-2xl shadow-xl space-y-8">
         <div className="text-center">
           <div className="inline-flex p-3 bg-blue-600 rounded-xl mb-4">
             <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -55,13 +57,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           <div className="space-y-2">
             <div className="flex justify-between">
               <label className="text-sm font-medium text-slate-700">Password</label>
-              <button 
-                type="button"
-                onClick={(e) => { e.preventDefault(); alert("Feature coming soon!"); }}
-                className="text-xs text-blue-600 hover:underline"
-              >
-                Forgot?
-              </button>
+              <a href="#" className="text-xs text-blue-600 hover:underline">Forgot?</a>
             </div>
             <input
               type="password"

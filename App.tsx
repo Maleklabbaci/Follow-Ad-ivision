@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { User, UserRole, Client, CampaignStats, IntegrationSecret } from './types';
 import Layout from './components/Layout';
@@ -11,46 +11,28 @@ import AdminCampaigns from './pages/AdminCampaigns';
 import AdminSqlEditor from './pages/AdminSqlEditor';
 import Login from './pages/Login';
 
-const MOCK_CLIENTS: Client[] = [
-  { id: 'c1', name: 'Elite Fitness', email: 'owner@elitefitness.com', createdAt: '2023-10-01', adAccounts: ['act_12345678'], campaignIds: ['cp_1'] },
-  { id: 'c2', name: 'Bloom Boutique', email: 'contact@bloomboutique.fr', createdAt: '2023-11-15', adAccounts: ['act_87654321'], campaignIds: ['cp_2', 'cp_3'] }
-];
-
-const MOCK_CAMPAIGNS: CampaignStats[] = [
-  { id: '1', campaignId: 'cp_1', name: 'Spring Sale - Fitness', date: '2024-03-20', spend: 450.50, impressions: 12500, clicks: 850, conversions: 45, ctr: 0.068, cpc: 0.53, roas: 3.2, status: 'ACTIVE', dataSource: 'MOCK' },
-  { id: '2', campaignId: 'cp_2', name: 'Remarketing - Bloom', date: '2024-03-20', spend: 120.00, impressions: 5000, clicks: 300, conversions: 12, ctr: 0.06, cpc: 0.40, roas: 5.1, status: 'ACTIVE', dataSource: 'MOCK' },
-  { id: '3', campaignId: 'cp_3', name: 'Cold Interest - Bloom', date: '2024-03-20', spend: 850.00, impressions: 45000, clicks: 1200, conversions: 25, ctr: 0.026, cpc: 0.70, roas: 1.8, status: 'PAUSED', dataSource: 'MOCK' }
-];
-
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(() => {
-    try {
-      const saved = localStorage.getItem('auth_user');
-      return saved ? JSON.parse(saved) : null;
-    } catch { return null; }
+    const saved = localStorage.getItem('auth_user');
+    return saved ? JSON.parse(saved) : null;
   });
 
   const [clients, setClients] = useState<Client[]>(() => {
-    try {
-      const saved = localStorage.getItem('app_clients');
-      return saved ? JSON.parse(saved) : MOCK_CLIENTS;
-    } catch { return MOCK_CLIENTS; }
+    const saved = localStorage.getItem('app_clients');
+    return saved ? JSON.parse(saved) : [];
   });
 
   const [secrets, setSecrets] = useState<IntegrationSecret[]>(() => {
-    try {
-      const saved = localStorage.getItem('app_secrets');
-      return saved ? JSON.parse(saved) : [];
-    } catch { return []; }
+    const saved = localStorage.getItem('app_secrets');
+    return saved ? JSON.parse(saved) : [];
   });
 
   const [campaigns, setCampaigns] = useState<CampaignStats[]>(() => {
-    try {
-      const saved = localStorage.getItem('app_campaigns');
-      return saved ? JSON.parse(saved) : MOCK_CAMPAIGNS;
-    } catch { return MOCK_CAMPAIGNS; }
+    const saved = localStorage.getItem('app_campaigns');
+    return saved ? JSON.parse(saved) : [];
   });
 
+  // Sauvegarde persistante à chaque modification
   useEffect(() => {
     localStorage.setItem('app_clients', JSON.stringify(clients));
   }, [clients]);
