@@ -82,12 +82,16 @@ export interface CampaignStats {
   reach: number;
   frequency: number;
   clicks: number;
-  conversions: number; // Simplifié
+  conversions: number;
+  resultat: number; 
+  cost: number;     
+  results: number;          // Nouveau champ
+  cost_per_result: number;  // Nouveau champ
   conversion_action_type: string; 
   ctr: number;
   cpc: number;
   cpm: number;
-  cpa: number; // Simplifié
+  cpa: number;
   roas: number;
   status: 'ACTIVE' | 'PAUSED' | 'ARCHIVED';
   lastSync?: string;
