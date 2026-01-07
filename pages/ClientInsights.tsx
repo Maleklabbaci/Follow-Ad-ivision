@@ -37,7 +37,6 @@ const ClientInsights: React.FC<ClientInsightsProps> = ({ user, campaigns = [], s
     setLoading(true);
     setInsights(null);
     try {
-      // Extraction de la clé AI si configurée
       const aiSecret = secrets.find(s => s.type === 'AI');
       let apiKey = undefined;
       if (aiSecret && aiSecret.value !== 'managed_by_env') {
@@ -46,9 +45,9 @@ const ClientInsights: React.FC<ClientInsightsProps> = ({ user, campaigns = [], s
 
       const result = await getCampaignInsights(clientCampaigns, apiKey);
       setInsights(result);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("Erreur lors de l'audit.");
+      alert(`Erreur Audit IA : ${err.message || "Problème technique."}`);
     } finally {
       setLoading(false);
     }

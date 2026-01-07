@@ -35,7 +35,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ clients, campaigns, sec
 
   const totals = useMemo(() => {
     return certifiedCampaigns.reduce((acc, c) => ({
-      spend: acc.spend + (c.spend || 0),
+      spend: acc.spend + (Number(c.spend) || 0),
       conv: acc.conv + (c.conversations_started || 0),
       clicks: acc.clicks + (c.clicks || 0),
       impressions: acc.impressions + (c.impressions || 0),
@@ -56,7 +56,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ clients, campaigns, sec
   const clientPerformances = useMemo(() => {
     return clients.map(client => {
       const related = campaigns.filter(cp => cp && client.campaignIds.includes(cp.campaignId));
-      const spend = related.reduce((sum, cp) => sum + (cp.spend || 0), 0); 
+      const spend = related.reduce((sum, cp) => sum + (Number(cp.spend) || 0), 0); 
       const clicks = related.reduce((sum, cp) => sum + (cp.clicks || 0), 0);
       const imps = related.reduce((sum, cp) => sum + (cp.impressions || 0), 0);
       const ctr = imps > 0 ? (clicks / imps) * 100 : 0;
@@ -74,13 +74,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ clients, campaigns, sec
 
   const generateReport = async () => {
     if (certifiedCampaigns.length === 0) {
-      alert("Aucune donnée disponible pour le périmètre sélectionné.");
+      alert("Aucune donnée disponible pour l'audit.");
       return;
     }
     setIsGenerating(true);
     setAiReport(null);
     try {
-      // Récupération de la clé AI configurée
       const aiSecret = secrets.find(s => s.type === 'AI');
       let apiKey = undefined;
       if (aiSecret && aiSecret.value !== 'managed_by_env') {
@@ -89,8 +88,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ clients, campaigns, sec
 
       const report = await getCampaignInsights(certifiedCampaigns, apiKey);
       setAiReport(report);
-    } catch (err) {
-      alert("Erreur lors de l'génération du rapport IA.");
+    } catch (err: any) {
+      alert(`Erreur IA : ${err.message || "Problème lors de la génération du rapport."}`);
     } finally {
       setIsGenerating(false);
     }
@@ -101,7 +100,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ clients, campaigns, sec
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className="text-3xl font-black text-slate-900 tracking-tight uppercase italic">Vue Agency Certifiée</h2>
-          <p className="text-slate-500 text-sm mt-1 font-medium">Analyse consolidée de {certifiedCampaigns.length} campagnes (Filtre: Started Conversations).</p>
+          <p className="text-slate-500 text-sm mt-1 font-medium">Analyse consolidée de {certifiedCampaigns.length} campagnes.</p>
         </div>
         <div className="flex items-center gap-3">
            <div className="bg-white px-4 py-2 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
