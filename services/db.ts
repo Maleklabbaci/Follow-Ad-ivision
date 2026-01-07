@@ -1,52 +1,10 @@
 
 import { Client, CampaignStats, IntegrationSecret, User, UserRole } from '../types';
-
-/**
- * MOTEUR DE BASE DE DONNÉES VIRTUEL (VDB)
- * Simule un backend SQL/NoSQL persistant avec gestion internationale.
- */
+import { supabase } from './supabase';
 
 const STORAGE_KEY = 'adpulse_master_db';
 
-interface DBStructure {
-  clients: Client[];
-  campaigns: CampaignStats[];
-  secrets: IntegrationSecret[];
-  users: User[];
-  lastUpdate: string;
-}
-
-const DEFAULT_DB: DBStructure = {
-  clients: [
-    { id: 'c1', name: 'Elite Fitness Pro', email: 'contact@fitness.com', createdAt: '2024-01-01', adAccounts: ['act_12345678'], campaignIds: ['cp_1', 'cp_2'] },
-    { id: 'c2', name: 'Bloom Boutique', email: 'client@bloom.com', createdAt: '2024-02-15', adAccounts: ['act_87654321'], campaignIds: ['cp_3', 'cp_4'] }
-  ],
-  campaigns: [],
-  secrets: [
-    { type: 'FACEBOOK', value: '', updatedAt: '', status: 'UNTESTED' },
-    { type: 'DATABASE', value: '', updatedAt: '', status: 'UNTESTED' }
-  ],
-  users: [
-    { id: 'u1', email: 'admin@agency.com', name: 'Senior Architect', role: UserRole.ADMIN },
-    { id: 'u2', email: 'client@bloom.com', name: 'Bloom Boutique', role: UserRole.CLIENT, clientId: 'c2' }
-  ],
-  lastUpdate: new Date().toISOString()
-};
-
 class DatabaseEngine {
-  private data: DBStructure;
-
-  constructor() {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    this.data = saved ? JSON.parse(saved) : DEFAULT_DB;
-    this.persist();
-  }
-
-  private persist() {
-    this.data.lastUpdate = new Date().toISOString();
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data));
-  }
-
   // --- UTILS ---
   formatCurrency(amount: number, currency: string = 'USD'): string {
     return new Intl.NumberFormat(currency === 'EUR' ? 'fr-FR' : 'en-US', {
@@ -56,31 +14,63 @@ class DatabaseEngine {
     }).format(amount);
   }
 
-  // --- CLIENTS ---
-  getClients(): Client[] { return this.data.clients; }
-  saveClients(clients: Client[]) {
-    this.data.clients = clients;
-    this.persist();
+  // --- CLOUD SYNC METHODS ---
+  async fetchAll() {
+    try {
+      const [clientsRes, campaignsRes, secretsRes] = await Promise.all([
+        supabase.from('clients').select('*'),
+        supabase.from('campaigns').select('*'),
+        supabase.from('secrets').select('*')
+      ]);
+
+      return {
+        clients: clientsRes.data || [],
+        campaigns: campaignsRes.data || [],
+        secrets: secretsRes.data || []
+      };
+    } catch (error) {
+      console.error("Cloud Sync Error:", error);
+      return null;
+    }
   }
 
-  // --- CAMPAIGNS ---
-  getCampaigns(): CampaignStats[] { return this.data.campaigns; }
-  saveCampaigns(campaigns: CampaignStats[]) {
-    this.data.campaigns = campaigns;
-    this.persist();
+  // Initialisation synchronisée avec localstorage en fallback
+  getClients(): Client[] {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    return saved ? JSON.parse(saved).clients : [];
   }
 
-  // --- SECRETS ---
-  getSecrets(): IntegrationSecret[] { return this.data.secrets; }
-  saveSecrets(secrets: IntegrationSecret[]) {
-    this.data.secrets = secrets;
-    this.persist();
+  getCampaigns(): CampaignStats[] {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    return saved ? JSON.parse(saved).campaigns : [];
   }
 
-  // --- USERS ---
-  getUsers(): User[] { return this.data.users; }
-  
-  // --- UTILS ---
+  getSecrets(): IntegrationSecret[] {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    return saved ? JSON.parse(saved).secrets : [];
+  }
+
+  // Sauvegarde Cloud + Locale
+  async saveClients(clients: Client[]) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...this.getData(), clients }));
+    await supabase.from('clients').upsert(clients);
+  }
+
+  async saveCampaigns(campaigns: CampaignStats[]) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...this.getData(), campaigns }));
+    await supabase.from('campaigns').upsert(campaigns);
+  }
+
+  async saveSecrets(secrets: IntegrationSecret[]) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...this.getData(), secrets }));
+    await supabase.from('secrets').upsert(secrets);
+  }
+
+  private getData() {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    return saved ? JSON.parse(saved) : { clients: [], campaigns: [], secrets: [] };
+  }
+
   reset() {
     localStorage.removeItem(STORAGE_KEY);
     window.location.reload();

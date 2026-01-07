@@ -13,18 +13,34 @@ import AdminSqlEditor from './pages/AdminSqlEditor';
 import Login from './pages/Login';
 
 const App: React.FC = () => {
+  const [isInitializing, setIsInitializing] = useState(true);
   const [user, setUser] = useState<User | null>(() => {
     const saved = localStorage.getItem('auth_session');
     return saved ? JSON.parse(saved) : null;
   });
 
-  const [clients, setClients] = useState<Client[]>(() => DB.getClients());
-  const [secrets, setSecrets] = useState<IntegrationSecret[]>(() => DB.getSecrets());
-  const [campaigns, setCampaigns] = useState<CampaignStats[]>(() => DB.getCampaigns());
+  const [clients, setClients] = useState<Client[]>([]);
+  const [secrets, setSecrets] = useState<IntegrationSecret[]>([]);
+  const [campaigns, setCampaigns] = useState<CampaignStats[]>([]);
 
-  useEffect(() => { DB.saveClients(clients); }, [clients]);
-  useEffect(() => { DB.saveSecrets(secrets); }, [secrets]);
-  useEffect(() => { DB.saveCampaigns(campaigns); }, [campaigns]);
+  // Initial Cloud Fetch
+  useEffect(() => {
+    const initCloud = async () => {
+      const data = await DB.fetchAll();
+      if (data) {
+        setClients(data.clients);
+        setCampaigns(data.campaigns);
+        setSecrets(data.secrets);
+      }
+      setIsInitializing(false);
+    };
+    initCloud();
+  }, []);
+
+  // Sync to Cloud on Changes
+  useEffect(() => { if (!isInitializing) DB.saveClients(clients); }, [clients, isInitializing]);
+  useEffect(() => { if (!isInitializing) DB.saveSecrets(secrets); }, [secrets, isInitializing]);
+  useEffect(() => { if (!isInitializing) DB.saveCampaigns(campaigns); }, [campaigns, isInitializing]);
 
   const sanitizeCampaign = useCallback((cp: any): CampaignStats => {
     const spend = Math.max(0, parseFloat(String(cp.spend)) || 0);
@@ -60,8 +76,9 @@ const App: React.FC = () => {
     };
   }, []);
 
+  // Auto-seed if empty
   useEffect(() => {
-    if (campaigns.length === 0 && clients.length > 0) {
+    if (!isInitializing && campaigns.length === 0 && clients.length > 0) {
       const allLinkedIds = clients.flatMap(c => c.campaignIds);
       const newEntries = allLinkedIds.map(id => {
         const owner = clients.find(c => c.campaignIds?.includes(id));
@@ -79,7 +96,7 @@ const App: React.FC = () => {
       });
       setCampaigns(newEntries);
     }
-  }, [clients, campaigns.length, sanitizeCampaign]);
+  }, [clients, campaigns.length, sanitizeCampaign, isInitializing]);
 
   const handleLogin = (u: User) => {
     setUser(u);
@@ -90,6 +107,18 @@ const App: React.FC = () => {
     setUser(null);
     localStorage.removeItem('auth_session');
   };
+
+  if (isInitializing) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-slate-900 text-white flex-col gap-4">
+        <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+        <div className="text-center">
+          <p className="font-black text-xl tracking-tighter uppercase italic">AdPulse Cloud Sync</p>
+          <p className="text-xs text-slate-400 font-bold tracking-widest uppercase">Initialisation de la base de données...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <HashRouter>
