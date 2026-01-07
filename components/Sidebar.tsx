@@ -6,9 +6,11 @@ import { User, UserRole } from '../types';
 interface SidebarProps {
   user: User;
   onLogout: () => void;
+  isMobile?: boolean;
+  mobileCallback?: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ user, onLogout }) => {
+const Sidebar: React.FC<SidebarProps> = ({ user, onLogout, isMobile = false, mobileCallback }) => {
   const location = useLocation();
   const isAdmin = user.role === UserRole.ADMIN;
 
@@ -17,44 +19,47 @@ const Sidebar: React.FC<SidebarProps> = ({ user, onLogout }) => {
     return (
       <Link
         to={to}
-        className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+        onClick={mobileCallback}
+        className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-200 ${
           isActive 
-          ? 'bg-blue-600 text-white font-medium shadow-sm' 
-          : 'text-slate-600 hover:bg-slate-100'
+          ? 'bg-blue-600 text-white font-black shadow-lg shadow-blue-100' 
+          : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900 font-bold'
         }`}
       >
-        {icon}
-        <span>{label}</span>
+        <div className={`${isActive ? 'text-white' : 'text-slate-400'}`}>
+          {icon}
+        </div>
+        <span className="text-sm tracking-tight">{label}</span>
       </Link>
     );
   };
 
-  return (
-    <aside className="w-64 bg-white border-r border-slate-200 flex flex-col h-full hidden lg:flex">
+  const content = (
+    <>
       <div className="p-6">
-        <div className="flex items-center gap-2 mb-8">
-          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-            <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+        <div className="flex items-center gap-3 mb-10">
+          <div className="w-10 h-10 bg-slate-900 rounded-2xl flex items-center justify-center shadow-xl shadow-slate-200">
+            <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
             </svg>
           </div>
-          <span className="text-xl font-bold text-slate-900 tracking-tight">AdPulse</span>
+          <span className="text-2xl font-black text-slate-900 tracking-tighter italic">ADPULSE</span>
         </div>
 
-        <nav className="space-y-1">
+        <nav className="space-y-1.5">
           {isAdmin ? (
             <>
-              <div className="px-4 text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2 mt-4">Agency</div>
+              <div className="px-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 mt-8">Agency Engine</div>
               <NavLink to="/" label="Dashboard" icon={<DashboardIcon />} />
               <NavLink to="/admin/clients" label="Clients" icon={<ClientsIcon />} />
               <NavLink to="/admin/campaigns" label="Campaigns" icon={<CampaignsIcon />} />
-              <div className="px-4 text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2 mt-4">Engineering</div>
+              <div className="px-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 mt-8">Technical Access</div>
               <NavLink to="/admin/sql-editor" label="Database" icon={<DatabaseIcon />} />
               <NavLink to="/admin/settings" label="Settings" icon={<SettingsIcon />} />
             </>
           ) : (
             <>
-              <div className="px-4 text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2 mt-4">Campaigns</div>
+              <div className="px-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 mt-8">Workspace</div>
               <NavLink to="/client/dashboard" label="Analytics" icon={<DashboardIcon />} />
             </>
           )}
@@ -64,12 +69,24 @@ const Sidebar: React.FC<SidebarProps> = ({ user, onLogout }) => {
       <div className="mt-auto p-6 border-t border-slate-100">
         <button
           onClick={onLogout}
-          className="flex items-center gap-3 px-4 py-3 w-full rounded-lg text-red-600 hover:bg-red-50 transition-colors font-medium"
+          className="flex items-center gap-3 px-4 py-4 w-full rounded-2xl text-red-600 hover:bg-red-50 transition-all font-black text-sm group"
         >
-          <LogoutIcon />
-          <span>Logout</span>
+          <div className="group-hover:scale-110 transition-transform">
+            <LogoutIcon />
+          </div>
+          <span>LOGOUT</span>
         </button>
       </div>
+    </>
+  );
+
+  if (isMobile) {
+    return <div className="h-full flex flex-col">{content}</div>;
+  }
+
+  return (
+    <aside className="w-72 bg-white border-r border-slate-200 flex flex-col h-full hidden lg:flex shrink-0">
+      {content}
     </aside>
   );
 };
@@ -102,7 +119,7 @@ const DatabaseIcon = () => (
 );
 const LogoutIcon = () => (
   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
   </svg>
 );
 
