@@ -13,7 +13,7 @@ interface AdminCampaignsProps {
 
 const AdminCampaigns: React.FC<AdminCampaignsProps> = ({ clients, setClients, campaigns, setCampaigns, secrets }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterClient, setFilterClient] = useState('all');
+  const [filterClient, setFilterClient] = useState('all'); // 'all', 'unassigned', or clientId
   const [isSyncing, setIsSyncing] = useState(false);
   const [isAuditing, setIsAuditing] = useState(false);
   const [syncLogs, setSyncLogs] = useState<string[]>([]);
@@ -42,7 +42,14 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({ clients, setClients, ca
       };
     }).filter(cp => {
       const matchesSearch = cp.name.toLowerCase().includes(searchTerm.toLowerCase()) || cp.campaignId.includes(searchTerm);
-      const matchesClient = filterClient === 'all' || cp.clientId === filterClient;
+      
+      let matchesClient = true;
+      if (filterClient === 'unassigned') {
+        matchesClient = cp.clientId === null;
+      } else if (filterClient !== 'all') {
+        matchesClient = cp.clientId === filterClient;
+      }
+      
       return matchesSearch && matchesClient;
     }).sort((a, b) => (b.lastSync || '').localeCompare(a.lastSync || ''));
   }, [campaigns, clients, searchTerm, filterClient]);
@@ -253,7 +260,18 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({ clients, setClients, ca
       <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden">
         <div className="p-8 border-b border-slate-100 bg-slate-50/30 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <h3 className="text-xl font-bold text-slate-800">Registre de Certification</h3>
-          <div className="flex gap-4 w-full sm:w-auto">
+          <div className="flex flex-wrap gap-4 w-full sm:w-auto">
+            <select 
+              className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm outline-none font-bold text-slate-600"
+              value={filterClient}
+              onChange={e => setFilterClient(e.target.value)}
+            >
+              <option value="all">Tous les clients</option>
+              <option value="unassigned">Non assignées</option>
+              {clients.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
             <input 
               type="text" 
               placeholder="Chercher ID ou Nom..." 
@@ -376,7 +394,7 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({ clients, setClients, ca
               {filteredCampaigns.length === 0 && (
                 <tr>
                   <td colSpan={8} className="px-8 py-20 text-center text-slate-400 italic font-medium">
-                    Aucune campagne trouvée.
+                    Aucune campagne trouvée pour les critères sélectionnés.
                   </td>
                 </tr>
               )}
@@ -386,7 +404,7 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({ clients, setClients, ca
       </div>
 
       {isSyncing && (
-        <div className="fixed bottom-8 right-8 w-80 bg-slate-900 text-white rounded-3xl p-6 shadow-2xl border border-white/10 animate-in slide-in-from-bottom-10">
+        <div className="fixed bottom-8 right-8 w-80 bg-slate-900 text-white rounded-3xl p-6 shadow-2xl border border-white/10 animate-in slide-in-from-bottom-10 z-50">
           <div className="flex justify-between items-center mb-4">
             <span className="text-xs font-black uppercase tracking-widest text-blue-400">Extraction Meta</span>
             <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
