@@ -1,4 +1,3 @@
-
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { User, CampaignStats, Client, UserRole, IntegrationSecret } from '../types';
@@ -215,7 +214,11 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns = [],
           </div>
         </div>
         <div className="xl:col-span-1 h-full">
-           <ClientInsights user={activeClient ? { ...user, clientId: activeClient.id } : user} campaigns={campaigns} />
+           <ClientInsights 
+              user={activeClient ? { ...user, clientId: activeClient.id } : user} 
+              campaigns={campaigns} 
+              secrets={secrets} 
+            />
         </div>
       </div>
 

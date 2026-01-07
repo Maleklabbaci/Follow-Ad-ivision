@@ -1,14 +1,15 @@
-
 import React, { useState, useMemo } from 'react';
-import { User, CampaignStats, Client } from '../types';
+import { User, CampaignStats, Client, IntegrationSecret } from '../types';
 import { getCampaignInsights } from '../services/geminiService';
+import { decryptSecret } from '../services/cryptoService';
 
 interface ClientInsightsProps {
   user: User;
   campaigns: CampaignStats[];
+  secrets: IntegrationSecret[];
 }
 
-const ClientInsights: React.FC<ClientInsightsProps> = ({ user, campaigns = [] }) => {
+const ClientInsights: React.FC<ClientInsightsProps> = ({ user, campaigns = [], secrets = [] }) => {
   const [insights, setInsights] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -36,7 +37,14 @@ const ClientInsights: React.FC<ClientInsightsProps> = ({ user, campaigns = [] })
     setLoading(true);
     setInsights(null);
     try {
-      const result = await getCampaignInsights(clientCampaigns);
+      // Extraction de la clé AI si configurée
+      const aiSecret = secrets.find(s => s.type === 'AI');
+      let apiKey = undefined;
+      if (aiSecret && aiSecret.value !== 'managed_by_env') {
+        apiKey = await decryptSecret(aiSecret.value);
+      }
+
+      const result = await getCampaignInsights(clientCampaigns, apiKey);
       setInsights(result);
     } catch (err) {
       console.error(err);

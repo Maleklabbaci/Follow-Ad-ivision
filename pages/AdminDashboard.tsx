@@ -1,19 +1,20 @@
-
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Client, CampaignStats } from '../types';
+import { Client, CampaignStats, IntegrationSecret } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { getCampaignInsights } from '../services/geminiService';
 import { useCurrency } from '../contexts/CurrencyContext';
+import { decryptSecret } from '../services/cryptoService';
 
 interface AdminDashboardProps {
   clients: Client[];
   campaigns: CampaignStats[];
+  secrets: IntegrationSecret[];
 }
 
 const COLORS = ['#2563eb', '#10b981', '#f59e0b', '#6366f1', '#ec4899'];
 
-const AdminDashboard: React.FC<AdminDashboardProps> = ({ clients, campaigns }) => {
+const AdminDashboard: React.FC<AdminDashboardProps> = ({ clients, campaigns, secrets }) => {
   const navigate = useNavigate();
   const [isGenerating, setIsGenerating] = useState(false);
   const [aiReport, setAiReport] = useState<string | null>(null);
@@ -22,7 +23,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ clients, campaigns }) =
   
   const certifiedCampaigns = useMemo(() => {
     const allLinkedIds = new Set(clients.flatMap(c => c.campaignIds));
-    const filtered = campaigns.filter(cp => allLinkedIds.has(cp.campaignId));
+    const filtered = campaigns.filter(cp => cp && allLinkedIds.has(cp.campaignId));
     
     if (selectedClientForAi === 'all') return filtered;
     
@@ -54,16 +55,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ clients, campaigns }) =
   
   const clientPerformances = useMemo(() => {
     return clients.map(client => {
-      const related = campaigns.filter(cp => client.campaignIds.includes(cp.campaignId));
-      const spend = related.reduce((sum, cp) => sum + cp.spend, 0); 
-      const clicks = related.reduce((sum, cp) => sum + cp.clicks, 0);
-      const imps = related.reduce((sum, cp) => sum + cp.impressions, 0);
+      const related = campaigns.filter(cp => cp && client.campaignIds.includes(cp.campaignId));
+      const spend = related.reduce((sum, cp) => sum + (cp.spend || 0), 0); 
+      const clicks = related.reduce((sum, cp) => sum + (cp.clicks || 0), 0);
+      const imps = related.reduce((sum, cp) => sum + (cp.impressions || 0), 0);
       const ctr = imps > 0 ? (clicks / imps) * 100 : 0;
       return { 
         name: client.name, 
         spendRaw: spend,
         spendConverted: convert(spend), 
-        conv: related.reduce((sum, cp) => sum + cp.conversations_started, 0), 
+        conv: related.reduce((sum, cp) => sum + (cp.conversations_started || 0), 0), 
         ctr, 
         id: client.id, 
         count: related.length 
@@ -79,7 +80,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ clients, campaigns }) =
     setIsGenerating(true);
     setAiReport(null);
     try {
-      const report = await getCampaignInsights(certifiedCampaigns);
+      // Récupération de la clé AI configurée
+      const aiSecret = secrets.find(s => s.type === 'AI');
+      let apiKey = undefined;
+      if (aiSecret && aiSecret.value !== 'managed_by_env') {
+        apiKey = await decryptSecret(aiSecret.value);
+      }
+
+      const report = await getCampaignInsights(certifiedCampaigns, apiKey);
       setAiReport(report);
     } catch (err) {
       alert("Erreur lors de l'génération du rapport IA.");

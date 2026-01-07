@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { User, UserRole, Client, CampaignStats, IntegrationSecret, AuditLog, AiReport } from './types';
@@ -85,7 +84,7 @@ const App: React.FC = () => {
         <Routes>
           <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login onLogin={handleLogin} users={users} />} />
           <Route element={user ? <Layout user={user} onLogout={handleLogout} clients={clients} /> : <Navigate to="/login" replace />}>
-            <Route path="/" element={user?.role === UserRole.ADMIN ? <AdminDashboard clients={clients} campaigns={campaigns} /> : <Navigate to="/client/dashboard" replace />} />
+            <Route path="/" element={user?.role === UserRole.ADMIN ? <AdminDashboard clients={clients} campaigns={campaigns} secrets={secrets} /> : <Navigate to="/client/dashboard" replace />} />
             <Route path="/admin/clients" element={<AdminClients clients={clients} setClients={setClients} users={users} setUsers={setUsers} secrets={secrets} />} />
             <Route path="/admin/campaigns" element={<AdminCampaigns clients={clients} setClients={setClients} campaigns={campaigns} setCampaigns={setCampaigns} secrets={secrets} />} />
             <Route path="/admin/sql-editor" element={<AdminSqlEditor clients={clients} campaigns={campaigns} secrets={secrets} users={users} auditLogs={auditLogs} aiReports={aiReports} />} />

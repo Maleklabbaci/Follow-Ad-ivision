@@ -3,10 +3,13 @@ import { CampaignStats } from "../types";
 
 /**
  * Service d'analyse IA pour les campagnes Meta Ads.
- * Utilise Gemini 3 Pro pour transformer les données brutes en conseils stratégiques.
+ * @param campaigns Données des campagnes à analyser
+ * @param apiKey Clé API optionnelle (si non fournie, utilise process.env.API_KEY)
  */
-export const getCampaignInsights = async (campaigns: CampaignStats[]): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+export const getCampaignInsights = async (campaigns: CampaignStats[], apiKey?: string): Promise<string> => {
+  // Détermination de la clé à utiliser : priorité à la clé saisie manuellement
+  const finalKey = (apiKey && apiKey !== 'managed_by_env') ? apiKey : process.env.API_KEY;
+  const ai = new GoogleGenAI({ apiKey: finalKey });
   
   const campaignDataSummary = campaigns.map(c => 
     `- Nom: ${c.name}, Spend: ${c.spend}, CPM: ${c.cpm.toFixed(2)}, CTR: ${(c.ctr * 100).toFixed(2)}%, Conv. Démarrées: ${c.conversations_started}, CPA Started: ${c.cpa_conversation_started.toFixed(2)}, Etat: ${c.status}`
@@ -50,18 +53,20 @@ export const getCampaignInsights = async (campaigns: CampaignStats[]): Promise<s
 };
 
 /**
- * Teste la connectivité avec l'API Gemini.
+ * Teste la connectivité avec l'API AI (Gemini).
+ * @param apiKey Clé à tester
  */
-export const testGeminiConnection = async (): Promise<boolean> => {
+export const testGeminiConnection = async (apiKey?: string): Promise<boolean> => {
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const finalKey = (apiKey && apiKey !== 'managed_by_env') ? apiKey : process.env.API_KEY;
+    const ai = new GoogleGenAI({ apiKey: finalKey });
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: 'Ping',
     });
     return !!response.text;
   } catch (error) {
-    console.error("Gemini connection test failed:", error);
+    console.error("AI connection test failed:", error);
     return false;
   }
 };
