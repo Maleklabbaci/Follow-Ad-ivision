@@ -54,11 +54,33 @@ class DatabaseEngine {
   }
 
   async saveClients(clients: Client[]) {
-    // On s'assure que les données sont propres pour l'upsert
     const { error } = await supabase.from('clients').upsert(clients, { onConflict: 'id' });
     if (error) {
       console.error("Client Save Failed:", error.message);
       throw error;
+    }
+  }
+
+  async deleteClient(clientId: string) {
+    console.log(`--- Deleting Client ${clientId} from Cloud ---`);
+    
+    // 1. Supprimer l'utilisateur lié à ce client
+    const { error: userError } = await supabase
+      .from('users')
+      .delete()
+      .eq('clientId', clientId);
+    
+    if (userError) console.warn("Note: No associated user found or error deleting user.");
+
+    // 2. Supprimer le client
+    const { error: clientError } = await supabase
+      .from('clients')
+      .delete()
+      .eq('id', clientId);
+
+    if (clientError) {
+      console.error("Cloud Deletion Failed:", clientError.message);
+      throw clientError;
     }
   }
 

@@ -31,22 +31,20 @@ const AdminClients: React.FC<AdminClientsProps> = ({ clients, setClients, users,
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(false);
   const [isLoadingCampaigns, setIsLoadingCampaigns] = useState(false);
 
-  // Fonction pour mettre à jour le nom et suggérer l'email
   const handleNameChange = (val: string) => {
     setNewClientName(val);
     if (val.trim()) {
-      // Nettoyage du nom pour l'email (minuscule, sans espaces ni caractères spéciaux simples)
       const emailPrefix = val.toLowerCase()
-        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Enlever les accents
-        .replace(/[^a-z0-9]/g, ''); // Garder seulement lettres et chiffres
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") 
+        .replace(/[^a-z0-9]/g, '');
       setNewClientEmail(`${emailPrefix}@ivison.com`);
       
-      // Suggestion de mot de passe par défaut si vide
       if (!newClientPassword) {
-        setNewClientPassword(`${emailPrefix}2024!`);
+        setNewClientPassword(`${emailPrefix}2025!`);
       }
     } else {
       setNewClientEmail('');
+      setNewClientPassword('');
     }
   };
 
@@ -55,6 +53,7 @@ const AdminClients: React.FC<AdminClientsProps> = ({ clients, setClients, users,
     setIsSaving(true);
     
     const clientId = Math.random().toString(36).substr(2, 9);
+    
     const newClient: Client = {
       id: clientId,
       name: newClientName,
@@ -70,7 +69,7 @@ const AdminClients: React.FC<AdminClientsProps> = ({ clients, setClients, users,
       name: newClientName,
       role: UserRole.CLIENT,
       clientId: clientId,
-      password: newClientPassword || 'client123'
+      password: newClientPassword
     };
 
     try {
@@ -84,28 +83,30 @@ const AdminClients: React.FC<AdminClientsProps> = ({ clients, setClients, users,
       setNewClientName('');
       setNewClientEmail('');
       setNewClientPassword('');
-      alert("Succès : Les données sont enregistrées dans votre base Supabase !");
+      alert(`SUCCÈS : Le client "${newClientName}" a été créé.\n\nIdentifiants de connexion :\nEmail : ${newClientEmail}\nPassword : ${newClientPassword}`);
     } catch (err: any) {
-      console.error("Save error:", err);
-      alert(`ERREUR DE SAUVEGARDE : ${err.message || JSON.stringify(err)}`);
+      alert(`ERREUR CLOUD : ${err.message || "Problème de synchronisation Supabase"}`);
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleDeleteClient = async (clientId: string, clientName: string) => {
-    if (window.confirm(`Voulez-vous supprimer définitivement ${clientName} de la base de données Cloud ?`)) {
+    if (window.confirm(`Supprimer définitivement ${clientName} et ses accès login de la base de données Cloud ?`)) {
+      setIsSaving(true);
       try {
-        const updatedClients = clients.filter(c => c.id !== clientId);
-        const updatedUsers = users.filter(u => u.clientId !== clientId);
+        // 1. Suppression physique dans Supabase (Client + User associé via service DB)
+        await DB.deleteClient(clientId);
         
-        await DB.saveClients(updatedClients);
-        await DB.saveUsers(updatedUsers);
+        // 2. Mise à jour de l'état local uniquement après succès cloud
+        setClients(prev => prev.filter(c => c.id !== clientId));
+        setUsers(prev => prev.filter(u => u.clientId !== clientId));
         
-        setClients(updatedClients);
-        setUsers(updatedUsers);
+        alert(`Supprimé : ${clientName} a été retiré de la plateforme et du Cloud.`);
       } catch (err: any) {
-        alert(`Erreur de suppression : ${err.message}`);
+        alert(`Erreur lors de la suppression Cloud : ${err.message}`);
+      } finally {
+        setIsSaving(false);
       }
     }
   };
@@ -113,23 +114,20 @@ const AdminClients: React.FC<AdminClientsProps> = ({ clients, setClients, users,
   const openLinkingModal = async (client: Client) => {
     const fbSecret = secrets.find(s => s.type === 'FACEBOOK');
     if (!fbSecret || fbSecret.status !== 'VALID') {
-      alert("Erreur : Aucun Token Facebook valide n'est configuré dans les Paramètres.");
+      alert("Configurez d'abord votre Token Meta dans 'Settings'.");
       return;
     }
-
     setLinkingClient(client);
     setSelectedAccountIds(client.adAccounts || []);
     setSelectedCampaignIds(client.campaignIds || []);
     setIsLoadingAccounts(true);
-    
     try {
       const token = await decryptSecret(fbSecret.value);
       const response = await fetch(`https://graph.facebook.com/v19.0/me/adaccounts?fields=name,currency,id&access_token=${token}`);
       const data = await response.json();
-      if (data.error) throw new Error(data.error.message);
       setAvailableAccounts(data.data || []);
     } catch (err: any) {
-      alert(`Erreur API Meta : ${err.message}`);
+      alert(`Meta API Error: ${err.message}`);
     } finally {
       setIsLoadingAccounts(false);
     }
@@ -151,11 +149,8 @@ const AdminClients: React.FC<AdminClientsProps> = ({ clients, setClients, users,
         if (data.data) all = [...all, ...data.data];
       }
       setAvailableCampaigns(all);
-    } catch (err: any) {
-      console.error(err);
-    } finally {
-      setIsLoadingCampaigns(false);
-    }
+    } catch (err: any) { console.error(err); } 
+    finally { setIsLoadingCampaigns(false); }
   }, [secrets]);
 
   useEffect(() => {
@@ -165,38 +160,33 @@ const AdminClients: React.FC<AdminClientsProps> = ({ clients, setClients, users,
   const saveLinking = async () => {
     if (!linkingClient) return;
     setIsSaving(true);
-    
     const updatedClients = clients.map(c => 
       c.id === linkingClient.id ? { ...c, adAccounts: selectedAccountIds, campaignIds: selectedCampaignIds } : c
     );
-    
     try {
       await DB.saveClients(updatedClients);
       setClients(updatedClients);
-      alert("Liaison sauvegardée dans Supabase !");
       setLinkingClient(null);
-    } catch (err: any) {
-      alert(`Erreur de liaison : ${err.message}`);
-    } finally {
-      setIsSaving(false);
-    }
+    } catch (err: any) { alert(err.message); } 
+    finally { setIsSaving(false); }
   };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-10">
-      <div className="flex justify-between items-center bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+      <div className="flex justify-between items-center bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm">
         <div>
-          <h2 className="text-2xl font-black text-slate-900 tracking-tight uppercase italic">Portfolio Clients</h2>
+          <h2 className="text-3xl font-black text-slate-900 tracking-tight uppercase italic">Dashboard Clients</h2>
           <div className="flex items-center gap-2 mt-1">
             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-            <p className="text-slate-500 font-bold uppercase tracking-widest text-[9px]">Connexion Supabase : Etablie</p>
+            <p className="text-slate-500 font-bold uppercase tracking-widest text-[9px]">SaaS Cloud Sync : ONLINE</p>
           </div>
         </div>
         <button
           onClick={() => setIsAdding(true)}
-          className="px-8 py-4 bg-blue-600 text-white rounded-2xl font-black text-xs hover:bg-blue-700 transition-all shadow-xl shadow-blue-100 uppercase tracking-widest"
+          className="px-8 py-4 bg-blue-600 text-white rounded-2xl font-black text-xs hover:bg-blue-700 transition-all shadow-xl shadow-blue-100 uppercase tracking-widest flex items-center gap-2"
         >
-          Nouveau Client SaaS
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
+          Ajouter un Client
         </button>
       </div>
 
@@ -204,8 +194,8 @@ const AdminClients: React.FC<AdminClientsProps> = ({ clients, setClients, users,
         <div className="bg-white p-10 rounded-[2.5rem] border-2 border-blue-100 shadow-2xl animate-in slide-in-from-top-4 duration-300">
           <div className="flex justify-between items-start mb-8">
             <div>
-              <h3 className="text-2xl font-black text-slate-900 uppercase italic">Création de Compte Cloud</h3>
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] mt-1">Génération automatique des accès activée</p>
+              <h3 className="text-2xl font-black text-slate-900 uppercase italic">Nouveau Compte Client</h3>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] mt-1">L'accès login sera créé automatiquement</p>
             </div>
             <button onClick={() => setIsAdding(false)} className="p-2 text-slate-300 hover:text-slate-600 transition-colors">
               <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -224,7 +214,7 @@ const AdminClients: React.FC<AdminClientsProps> = ({ clients, setClients, users,
               />
             </div>
             <div className="space-y-3">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2 italic">Email Client (Automatique)</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2 italic">Email (Identifiant Login)</label>
               <input 
                 type="email" 
                 required 
@@ -235,7 +225,7 @@ const AdminClients: React.FC<AdminClientsProps> = ({ clients, setClients, users,
               />
             </div>
             <div className="space-y-3">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2 italic">Mot de passe</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2 italic">Mot de Passe Client</label>
               <input 
                 type="text" 
                 required 
@@ -247,7 +237,7 @@ const AdminClients: React.FC<AdminClientsProps> = ({ clients, setClients, users,
             <div className="md:col-span-3 flex justify-end gap-4 mt-6">
               <button type="button" onClick={() => setIsAdding(false)} className="px-8 py-4 text-slate-400 font-black text-xs uppercase hover:text-slate-600">Annuler</button>
               <button type="submit" disabled={isSaving} className="px-12 py-4 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase shadow-2xl hover:bg-black transition-all flex items-center gap-3">
-                {isSaving ? <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div> : 'VALIDER & ENREGISTRER CLOUD'}
+                {isSaving ? <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div> : 'VALIDER & CRÉER LES ACCÈS'}
               </button>
             </div>
           </form>
@@ -255,34 +245,50 @@ const AdminClients: React.FC<AdminClientsProps> = ({ clients, setClients, users,
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
-        {clients.map(client => (
-          <div key={client.id} className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm hover:border-blue-400 hover:shadow-2xl transition-all p-10 group relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-6 opacity-0 group-hover:opacity-100 transition-all">
-                <button onClick={() => handleDeleteClient(client.id, client.name)} className="p-3 bg-red-50 text-red-500 rounded-2xl hover:bg-red-500 hover:text-white transition-all">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
+        {clients.map(client => {
+          const hasUserAccount = users.some(u => u.clientId === client.id);
+          return (
+            <div key={client.id} className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm hover:border-blue-400 hover:shadow-2xl transition-all p-10 group relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-6 opacity-0 group-hover:opacity-100 transition-all z-10">
+                  <button 
+                    onClick={() => handleDeleteClient(client.id, client.name)} 
+                    disabled={isSaving}
+                    className="p-3 bg-red-50 text-red-500 rounded-2xl hover:bg-red-500 hover:text-white transition-all disabled:opacity-50"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+              </div>
+              <div className="flex items-center gap-6 mb-8">
+                 <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center text-slate-300 font-black text-3xl group-hover:bg-blue-600 group-hover:text-white transition-all shadow-inner">{client.name.charAt(0)}</div>
+                 <div>
+                    <h3 className="text-2xl font-black text-slate-900 tracking-tight uppercase italic">{client.name}</h3>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className={`w-1.5 h-1.5 rounded-full ${hasUserAccount ? 'bg-emerald-500' : 'bg-slate-300'}`}></span>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                        {hasUserAccount ? 'Login Activé' : 'Pas de compte login'}
+                      </p>
+                    </div>
+                 </div>
+              </div>
+              <div className="space-y-4 pt-8 border-t border-slate-50">
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">Email Login</span>
+                  <span className="text-[11px] font-bold text-slate-600">{client.email}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">Assets Liés</span>
+                  <span className="px-4 py-1.5 bg-blue-50 rounded-xl text-xs font-black text-blue-600">{client.adAccounts?.length || 0}</span>
+                </div>
+              </div>
+              <div className="mt-10 flex gap-4">
+                <button onClick={() => openLinkingModal(client)} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-xl shadow-slate-100">Lier Meta Ads</button>
+                <button onClick={() => navigate(`/client/dashboard/${client.id}`)} className="p-4 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-100">
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
                 </button>
-            </div>
-            <div className="flex items-center gap-6 mb-8">
-               <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center text-slate-300 font-black text-3xl group-hover:bg-blue-600 group-hover:text-white transition-all shadow-inner">{client.name.charAt(0)}</div>
-               <div>
-                  <h3 className="text-2xl font-black text-slate-900 tracking-tight uppercase italic">{client.name}</h3>
-                  <p className="text-[11px] text-slate-400 font-bold uppercase tracking-widest">{client.email}</p>
-               </div>
-            </div>
-            <div className="space-y-4 pt-8 border-t border-slate-50">
-              <div className="flex justify-between items-center">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Accounts Liés</span>
-                <span className="px-4 py-1.5 bg-blue-50 rounded-xl text-xs font-black text-blue-600">{client.adAccounts?.length || 0}</span>
               </div>
             </div>
-            <div className="mt-10 flex gap-4">
-              <button onClick={() => openLinkingModal(client)} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-xl shadow-slate-100">Audit Assets</button>
-              <button onClick={() => navigate(`/client/dashboard/${client.id}`)} className="p-4 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-100">
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
-              </button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {linkingClient && (
@@ -290,8 +296,8 @@ const AdminClients: React.FC<AdminClientsProps> = ({ clients, setClients, users,
           <div className="bg-white w-full max-w-5xl rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col h-[90vh] border border-white/20">
             <div className="p-12 border-b border-slate-100 flex justify-between items-center bg-white">
               <div>
-                <h3 className="text-3xl font-black text-slate-900 tracking-tight uppercase italic">Configuration Meta Graph</h3>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-2">Association de comptes publicitaires pour {linkingClient.name}</p>
+                <h3 className="text-3xl font-black text-slate-900 tracking-tight uppercase italic">Meta Graph Sync</h3>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-2">Association de comptes pour {linkingClient.name}</p>
               </div>
               <button onClick={() => setLinkingClient(null)} className="p-4 hover:bg-slate-100 rounded-3xl transition-all">
                 <svg className="w-8 h-8 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -301,7 +307,7 @@ const AdminClients: React.FC<AdminClientsProps> = ({ clients, setClients, users,
               <div className="w-1/3 border-r border-slate-100 flex flex-col p-10 overflow-hidden">
                 <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-8 flex items-center gap-2">
                   <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
-                  Comptes Publicitaires
+                  Accounts Disponibles
                 </h4>
                 <div className="flex-1 overflow-y-auto space-y-4 pr-3 custom-scrollbar">
                   {isLoadingAccounts ? (
@@ -310,7 +316,7 @@ const AdminClients: React.FC<AdminClientsProps> = ({ clients, setClients, users,
                     </div>
                   ) : (
                     availableAccounts.map(account => (
-                      <div key={account.id} onClick={() => setSelectedAccountIds(prev => prev.includes(account.id) ? prev.filter(id => id !== account.id) : [...prev, account.id])} className={`p-5 rounded-[1.5rem] border-2 cursor-pointer transition-all ${selectedAccountIds.includes(account.id) ? 'border-blue-600 bg-blue-50 shadow-xl shadow-blue-50' : 'border-transparent bg-white hover:border-slate-200'}`}>
+                      <div key={account.id} onClick={() => setSelectedAccountIds(prev => prev.includes(account.id) ? prev.filter(id => id !== account.id) : [...prev, account.id])} className={`p-5 rounded-[1.5rem] border-2 transition-all ${selectedAccountIds.includes(account.id) ? 'border-blue-600 bg-blue-50' : 'border-transparent bg-white hover:border-slate-200'}`}>
                         <p className="text-sm font-black text-slate-900 uppercase truncate">{account.name}</p>
                         <p className="text-[9px] text-slate-400 font-bold tracking-widest mt-1">ID: {account.id}</p>
                       </div>
@@ -321,7 +327,7 @@ const AdminClients: React.FC<AdminClientsProps> = ({ clients, setClients, users,
               <div className="flex-1 flex flex-col p-10 overflow-hidden">
                 <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-8 flex items-center gap-2">
                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
-                   Campagnes Identifiées
+                   Campagnes Associées
                 </h4>
                 <div className="flex-1 overflow-y-auto space-y-3 pr-3 custom-scrollbar">
                   {isLoadingCampaigns ? (
@@ -330,37 +336,25 @@ const AdminClients: React.FC<AdminClientsProps> = ({ clients, setClients, users,
                     </div>
                   ) : availableCampaigns.length > 0 ? (
                     availableCampaigns.map(cp => (
-                      <div key={cp.id} onClick={() => setSelectedCampaignIds(prev => prev.includes(cp.id) ? prev.filter(id => id !== cp.id) : [...prev, cp.id])} className={`p-5 rounded-[1.5rem] border-2 cursor-pointer transition-all flex items-center justify-between ${selectedCampaignIds.includes(cp.id) ? 'border-emerald-500 bg-emerald-50 shadow-xl shadow-emerald-50' : 'border-transparent bg-white hover:border-slate-200'}`}>
+                      <div key={cp.id} onClick={() => setSelectedCampaignIds(prev => prev.includes(cp.id) ? prev.filter(id => id !== cp.id) : [...prev, cp.id])} className={`p-5 rounded-[1.5rem] border-2 cursor-pointer transition-all flex items-center justify-between ${selectedCampaignIds.includes(cp.id) ? 'border-emerald-500 bg-emerald-50' : 'border-transparent bg-white hover:border-slate-200'}`}>
                          <div>
                             <p className="text-sm font-black text-slate-900 uppercase">{cp.name}</p>
-                            <p className="text-[9px] text-slate-400 font-bold tracking-widest">{cp.status} • {cp.id}</p>
+                            <p className="text-[9px] text-slate-400 font-bold tracking-widest">{cp.status}</p>
                          </div>
                          {selectedCampaignIds.includes(cp.id) && <div className="w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center text-white"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg></div>}
                       </div>
                     ))
                   ) : (
-                    <div className="h-full flex flex-col items-center justify-center text-slate-300 italic uppercase font-black text-xs tracking-widest">Sélectionnez un compte pour voir les campagnes</div>
+                    <div className="h-full flex flex-col items-center justify-center text-slate-300 italic uppercase font-black text-xs tracking-widest">Sélectionnez un compte</div>
                   )}
                 </div>
               </div>
             </div>
-            <div className="p-10 border-t border-slate-100 flex justify-between items-center bg-white">
-                <div className="flex gap-10">
-                   <div className="flex flex-col">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Accounts</span>
-                      <span className="text-2xl font-black text-blue-600">{selectedAccountIds.length}</span>
-                   </div>
-                   <div className="flex flex-col">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Campagnes</span>
-                      <span className="text-2xl font-black text-emerald-500">{selectedCampaignIds.length}</span>
-                   </div>
-                </div>
-                <div className="flex gap-4">
-                  <button onClick={() => setLinkingClient(null)} className="px-8 py-4 text-slate-400 font-black text-xs uppercase hover:text-slate-600">Annuler</button>
-                  <button onClick={saveLinking} disabled={isSaving} className="px-14 py-4 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase shadow-2xl hover:bg-black transition-all flex items-center gap-4">
-                    {isSaving ? <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></div> : 'SYNC CLOUD & SAVE'}
-                  </button>
-                </div>
+            <div className="p-10 border-t border-slate-100 flex justify-end gap-4 bg-white">
+                <button onClick={() => setLinkingClient(null)} className="px-8 py-4 text-slate-400 font-black text-xs uppercase hover:text-slate-600">Annuler</button>
+                <button onClick={saveLinking} disabled={isSaving} className="px-14 py-4 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase shadow-2xl hover:bg-black transition-all flex items-center gap-4">
+                  {isSaving ? <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></div> : 'SAUVEGARDER LIAISON'}
+                </button>
             </div>
           </div>
         </div>
