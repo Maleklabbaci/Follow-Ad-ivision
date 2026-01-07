@@ -69,61 +69,48 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns = [],
   }, [clientCampaigns]);
 
   const avgRoas = clientCampaigns.length > 0 ? (totals.roasSum / clientCampaigns.length).toFixed(2) : '0.00';
-  const avgCpc = totals.clicks > 0 ? (totals.spend / totals.clicks).toFixed(2) : '0.00';
-  const avgCpa = totals.conv > 0 ? (totals.spend / totals.conv).toFixed(2) : '0.00';
+  const avgCpa = totals.conv > 0 ? (totals.spend / totals.conv).toFixed(2) : 'En attente';
   const avgCpm = totals.impressions > 0 ? ((totals.spend / totals.impressions) * 1000).toFixed(2) : '0.00';
   const avgCtr = totals.impressions > 0 ? ((totals.clicks / totals.impressions) * 100).toFixed(2) : '0.00';
-  const avgFreq = totals.reach > 0 ? (totals.impressions / totals.reach).toFixed(2) : '1.00';
 
   return (
     <div className="space-y-8 max-w-[1600px] mx-auto pb-12 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row justify-between items-end gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <h2 className="text-3xl font-black text-slate-900 tracking-tighter italic uppercase">{activeClient?.name}</h2>
-            <div className={`px-3 py-1 rounded-xl text-[10px] font-black border uppercase tracking-widest ${isRefreshing ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-emerald-50 text-emerald-600 border-emerald-200'}`}>
-              {isRefreshing ? 'Sync Live...' : 'Extraction Live v19.0'}
+            <h2 className="text-4xl font-black text-slate-900 tracking-tighter italic uppercase">{activeClient?.name}</h2>
+            <div className={`px-4 py-1.5 rounded-2xl text-[10px] font-black border uppercase tracking-widest ${isRefreshing ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-emerald-50 text-emerald-600 border-emerald-200'}`}>
+              {isRefreshing ? 'Sync Meta Live...' : 'Extraction Meta Certifiée'}
             </div>
           </div>
           <p className="text-slate-500 text-sm font-bold uppercase tracking-widest mt-1">
-            {clientCampaigns.length} Campagnes Audités • Dernière Sync: {lastUpdate.toLocaleTimeString()}
+            {clientCampaigns.length} Campagnes Audités • Sync: {lastUpdate.toLocaleTimeString()}
           </p>
         </div>
-        <div className="flex items-center gap-4 bg-white border border-slate-200 px-6 py-3 rounded-2xl shadow-sm">
+        <div className="flex items-center gap-4 bg-white border border-slate-200 px-6 py-4 rounded-[2rem] shadow-sm">
            <div className="text-right">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Auto-Update</p>
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Rafraîchissement Auto</p>
               <p className="text-xs font-black text-blue-600 tabular-nums">{refreshCountdown}s</p>
            </div>
-           <button onClick={triggerRefresh} className="p-2 hover:bg-slate-100 rounded-xl transition-all">
+           <button onClick={triggerRefresh} className="p-3 bg-slate-50 hover:bg-slate-100 rounded-2xl transition-all">
               <svg className={`w-5 h-5 text-slate-400 ${isRefreshing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
            </button>
         </div>
       </div>
 
-      {/* SECTION CONVERSION */}
-      <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.3em]">Phase de Conversion (Ventes)</h3>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <KPIBox label="ROAS Global" value={`${avgRoas}x`} color="indigo" sub="Retour sur invest." />
-        <KPIBox label="Ventes (Achats)" value={totals.conv.toString()} color="emerald" sub="Validé via Pixel" />
-        <KPIBox label="Coût / Achat (CPA)" value={`$${avgCpa}`} color="blue" sub="Moyenne globale" />
-        <KPIBox label="Dépense Totale" value={`$${totals.spend.toLocaleString()}`} color="white" sub="Budget consommé" />
-      </div>
-
-      {/* SECTION NOTORIÉTÉ ET ENGAGEMENT */}
-      <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.3em]">Notoriété & Engagement</h3>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <KPIBox label="Reach (Portée)" value={totals.reach.toLocaleString()} color="white" sub="Personnes uniques" />
-        <KPIBox label="Fréquence" value={`${avgFreq}x`} color="white" sub="Répétition / pers." />
-        <KPIBox label="CTR (Taux de clic)" value={`${avgCtr}%`} color="white" sub="Attractivité pub" />
-        <KPIBox label="CPM Moyen" value={`$${avgCpm}`} color="white" sub="Coût / 1000 imps" />
+        <KPIBox label="ROAS Consolidé" value={`${avgRoas}x`} color="indigo" sub="Performance Globale" />
+        <KPIBox label="Conversions (Pixel)" value={totals.conv.toString()} color="emerald" sub={totals.conv > 0 ? "Ventes Validées" : "Aucun achat détecté"} />
+        <KPIBox label="Reach Unique" value={totals.reach.toLocaleString()} color="blue" sub="Personnes Touchées" />
+        <KPIBox label="CPA Moyen" value={avgCpa !== 'En attente' ? `$${avgCpa}` : avgCpa} color="white" sub="Coût par Conversion" />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <div className="xl:col-span-2 bg-white p-10 rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
-          <h3 className="text-xl font-black text-slate-800 tracking-tight mb-8 uppercase">Entonnoir de Performance</h3>
+        <div className="xl:col-span-2 bg-white p-10 rounded-[2.5rem] border border-slate-200 shadow-sm relative overflow-hidden">
+          <h3 className="text-xl font-black text-slate-800 tracking-tight mb-8 uppercase italic">Analyse de Rentabilité</h3>
           <div className={`h-80 transition-all ${isRefreshing ? 'opacity-30 blur-sm' : 'opacity-100'}`}>
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={clientCampaigns.slice(0, 5)}>
+              <ComposedChart data={clientCampaigns.slice(0, 8)}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 9, fontWeight: 900, fill: '#94a3b8' }} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 9, fontWeight: 900, fill: '#94a3b8' }} />
@@ -140,34 +127,39 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns = [],
       </div>
 
       <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/10">
-          <h3 className="text-xl font-black text-slate-800 tracking-tight italic uppercase">Extraction Granulaire</h3>
-          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Audit Certifié Meta Graph v19.0</span>
+        <div className="p-10 border-b border-slate-100 flex justify-between items-center bg-slate-50/20">
+          <h3 className="text-2xl font-black text-slate-800 tracking-tight italic uppercase">Registre d'Audit Meta</h3>
+          <div className="flex items-center gap-2">
+            <span className="w-3 h-3 bg-emerald-500 rounded-full animate-pulse"></span>
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Données Certifiées Graph API</span>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
               <tr className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] border-b border-slate-100">
-                <th className="px-10 py-6">Détails Campagne</th>
+                <th className="px-10 py-6">Campagne</th>
+                <th className="px-10 py-6 text-right">Spend</th>
                 <th className="px-10 py-6 text-right">Reach</th>
-                <th className="px-10 py-6 text-right">Freq.</th>
+                <th className="px-10 py-6 text-right">Conv.</th>
                 <th className="px-10 py-6 text-right">CPM</th>
-                <th className="px-10 py-6 text-right">Achats</th>
                 <th className="px-10 py-6 text-right">ROAS</th>
               </tr>
             </thead>
             <tbody className={`divide-y divide-slate-100 ${isRefreshing ? 'opacity-20' : 'opacity-100'}`}>
               {clientCampaigns.map(cp => (
                 <tr key={cp.id} className="hover:bg-slate-50/50 transition-all group">
-                  <td className="px-10 py-7">
+                  <td className="px-10 py-8">
                     <div className="font-black text-slate-900 group-hover:text-blue-600 transition-colors">{cp.name}</div>
-                    <div className="text-[9px] font-bold text-blue-500 uppercase tracking-tighter">DATA LIVE • {cp.campaignId}</div>
+                    <div className="text-[9px] font-bold text-blue-500 uppercase tracking-widest">Extraction Live • {cp.campaignId}</div>
                   </td>
-                  <td className="px-10 py-7 text-right font-black tabular-nums">{cp.reach.toLocaleString()}</td>
-                  <td className="px-10 py-7 text-right font-bold text-slate-400 tabular-nums">{cp.frequency.toFixed(2)}x</td>
-                  <td className="px-10 py-7 text-right font-bold text-slate-400 tabular-nums">${cp.cpm.toFixed(2)}</td>
-                  <td className="px-10 py-7 text-right font-black tabular-nums text-emerald-600">{cp.conversions}</td>
-                  <td className={`px-10 py-7 text-right font-black tabular-nums text-lg ${cp.roas > 4 ? 'text-emerald-500' : 'text-blue-600'}`}>
+                  <td className="px-10 py-8 text-right font-black tabular-nums text-slate-900">${cp.spend.toLocaleString()}</td>
+                  <td className="px-10 py-8 text-right font-black tabular-nums text-slate-500">{cp.reach?.toLocaleString() || '---'}</td>
+                  <td className={`px-10 py-8 text-right font-black tabular-nums ${cp.conversions > 0 ? 'text-emerald-600' : 'text-slate-200'}`}>
+                    {cp.conversions || 0}
+                  </td>
+                  <td className="px-10 py-8 text-right font-bold text-slate-400 tabular-nums">${cp.cpm.toFixed(2)}</td>
+                  <td className={`px-10 py-8 text-right font-black tabular-nums text-xl ${cp.roas > 4 ? 'text-emerald-500' : 'text-blue-600'}`}>
                     {cp.roas.toFixed(2)}x
                   </td>
                 </tr>
@@ -188,9 +180,9 @@ const KPIBox = ({ label, value, color, sub }: any) => {
     white: 'bg-white text-slate-900 border-slate-200 shadow-sm'
   };
   return (
-    <div className={`p-8 rounded-[2rem] border transition-all hover:scale-[1.03] ${themes[color] || themes.white}`}>
+    <div className={`p-10 rounded-[2.5rem] border transition-all hover:scale-[1.03] ${themes[color] || themes.white}`}>
       <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-60 mb-2">{label}</p>
-      <p className="text-3xl font-black tabular-nums tracking-tighter">{value}</p>
+      <p className="text-4xl font-black tabular-nums tracking-tighter">{value}</p>
       <div className="h-px bg-current opacity-10 my-4"></div>
       <p className="text-[10px] font-bold uppercase tracking-widest opacity-40">{sub}</p>
     </div>
