@@ -5,18 +5,21 @@ import { decryptSecret } from '../services/cryptoService';
 
 interface AdminCampaignsProps {
   clients: Client[];
+  setClients: React.Dispatch<React.SetStateAction<Client[]>>;
   campaigns: CampaignStats[];
   setCampaigns: React.Dispatch<React.SetStateAction<CampaignStats[]>>;
   secrets: IntegrationSecret[];
 }
 
-const AdminCampaigns: React.FC<AdminCampaignsProps> = ({ clients, campaigns, setCampaigns, secrets }) => {
+const AdminCampaigns: React.FC<AdminCampaignsProps> = ({ clients, setClients, campaigns, setCampaigns, secrets }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterClient, setFilterClient] = useState('all');
   const [isSyncing, setIsSyncing] = useState(false);
   const [isAuditing, setIsAuditing] = useState(false);
   const [syncLogs, setSyncLogs] = useState<string[]>([]);
   const [progress, setProgress] = useState(0);
+  const [refreshingId, setRefreshingId] = useState<string | null>(null);
+  const [linkingCampaignId, setLinkingCampaignId] = useState<string | null>(null);
 
   const healthStats = useMemo(() => {
     const total = campaigns.length;
@@ -46,10 +49,83 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({ clients, campaigns, set
 
   const log = (msg: string) => setSyncLogs(prev => [msg, ...prev].slice(0, 10));
 
+  const handleLinkClient = (campaignId: string, targetClientId: string) => {
+    setClients(prev => prev.map(client => {
+      // 1. Remove the campaignId from current owner (if any)
+      const isCurrentOwner = client.campaignIds.includes(campaignId);
+      const isTarget = client.id === targetClientId;
+
+      let newIds = [...client.campaignIds];
+      if (isCurrentOwner && !isTarget) {
+        newIds = newIds.filter(id => id !== campaignId);
+      }
+      if (isTarget && !isCurrentOwner) {
+        newIds.push(campaignId);
+      }
+      
+      return { ...client, campaignIds: newIds };
+    }));
+    setLinkingCampaignId(null);
+  };
+
   // SUPPRESSION INDIVIDUELLE
   const handleDelete = (id: string, name: string) => {
     if (window.confirm(`Confirmer la suppression de la campagne : ${name} ?`)) {
       setCampaigns(prev => prev.filter(c => c.id !== id));
+      // Also clean up from clients
+      const campaign = campaigns.find(c => c.id === id);
+      if (campaign) {
+        setClients(prev => prev.map(c => ({
+          ...c,
+          campaignIds: c.campaignIds.filter(cid => cid !== campaign.campaignId)
+        })));
+      }
+    }
+  };
+
+  // ACTUALISATION INDIVIDUELLE
+  const refreshSingleCampaign = async (campaign: CampaignStats) => {
+    if (campaign.dataSource !== 'REAL_API') {
+      alert("Seules les campagnes certifiées API peuvent être actualisées individuellement.");
+      return;
+    }
+
+    const fbSecret = secrets.find(s => s.type === 'FACEBOOK');
+    if (!fbSecret || fbSecret.status !== 'VALID') {
+      alert("Clé Meta API non valide.");
+      return;
+    }
+
+    setRefreshingId(campaign.id);
+    try {
+      const token = await decryptSecret(fbSecret.value);
+      const res = await fetch(`https://graph.facebook.com/v19.0/${campaign.campaignId}?fields=name,status,insights{spend,impressions,clicks,conversions}&access_token=${token}`);
+      const data = await res.json();
+
+      if (data.error) throw new Error(data.error.message);
+
+      const insights = data.insights?.data?.[0] || { spend: 0, impressions: 0, clicks: 0, conversions: 0 };
+      
+      setCampaigns(prev => prev.map(cp => {
+        if (cp.id === campaign.id) {
+          return {
+            ...cp,
+            spend: parseFloat(insights.spend || 0),
+            impressions: parseInt(insights.impressions || 0),
+            clicks: parseInt(insights.clicks || 0),
+            conversions: parseInt(insights.conversions || 0),
+            roas: insights.spend > 0 ? (insights.conversions * 145) / insights.spend : 0,
+            lastSync: new Date().toISOString(),
+            isValidated: true,
+            auditLogs: [...(cp.auditLogs || []), `Actualisation individuelle réussie le ${new Date().toLocaleString()}`]
+          };
+        }
+        return cp;
+      }));
+    } catch (err: any) {
+      alert(`Erreur d'actualisation : ${err.message}`);
+    } finally {
+      setRefreshingId(null);
     }
   };
 
@@ -154,7 +230,10 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({ clients, campaigns, set
             disabled={isSyncing || isAuditing}
             className="flex-1 lg:flex-none px-6 py-3 bg-blue-600 text-white rounded-2xl font-black text-sm hover:bg-blue-700 transition-all shadow-xl shadow-blue-100 flex items-center justify-center gap-2"
           >
-            {isSyncing ? 'Extraction en cours...' : 'Extraction Globale Meta'}
+            <svg className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            {isSyncing ? 'Extraction...' : 'Actualiser Tout (Meta)'}
           </button>
         </div>
       </div>
@@ -184,7 +263,8 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({ clients, campaigns, set
           <table className="w-full text-left">
             <thead className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
               <tr>
-                <th className="px-8 py-5">Campagne & Client</th>
+                <th className="px-8 py-5">Campagne & ID</th>
+                <th className="px-8 py-5">Assignation Client</th>
                 <th className="px-8 py-5 text-center">Intégrité</th>
                 <th className="px-8 py-5 text-right">Metrics</th>
                 <th className="px-8 py-5 text-right">ROAS</th>
@@ -199,8 +279,45 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({ clients, campaigns, set
                     <div className="font-bold text-slate-900 line-clamp-1">{cp.name}</div>
                     <div className="flex items-center gap-2 mt-1">
                       <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">ID: {cp.campaignId}</span>
-                      <span className="text-[10px] text-blue-600 font-black px-1.5 py-0.5 bg-blue-50 rounded uppercase">{cp.clientName}</span>
                     </div>
+                  </td>
+                  <td className="px-8 py-6">
+                    {linkingCampaignId === cp.campaignId ? (
+                      <div className="flex items-center gap-2 animate-in fade-in zoom-in-95 duration-200">
+                        <select 
+                          className="px-3 py-1.5 bg-white border border-blue-500 text-blue-900 rounded-lg text-xs font-bold outline-none shadow-sm"
+                          value={cp.clientId || ''}
+                          onChange={(e) => handleLinkClient(cp.campaignId, e.target.value)}
+                        >
+                          <option value="">-- Détacher --</option>
+                          {clients.map(client => (
+                            <option key={client.id} value={client.id}>{client.name}</option>
+                          ))}
+                        </select>
+                        <button 
+                          onClick={() => setLinkingCampaignId(null)}
+                          className="p-1.5 bg-slate-100 text-slate-500 rounded-lg hover:bg-slate-200 transition-colors"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    ) : (
+                      <button 
+                        onClick={() => setLinkingCampaignId(cp.campaignId)}
+                        className={`group/link flex items-center gap-2 px-3 py-1.5 rounded-xl transition-all border ${
+                          cp.clientId 
+                            ? 'bg-blue-50 text-blue-700 border-blue-100 hover:border-blue-300' 
+                            : 'bg-slate-50 text-slate-400 border-slate-100 hover:bg-slate-100 hover:text-slate-600'
+                        }`}
+                      >
+                        <span className="text-[11px] font-black uppercase tracking-tight">{cp.clientName}</span>
+                        <svg className="w-3.5 h-3.5 opacity-0 group-hover/link:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                        </svg>
+                      </button>
+                    )}
                   </td>
                   <td className="px-8 py-6 text-center">
                     <div className="flex flex-col items-center gap-1">
@@ -225,21 +342,35 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({ clients, campaigns, set
                     </div>
                   </td>
                   <td className="px-8 py-6 text-right">
-                    <button 
-                      onClick={() => handleDelete(cp.id, cp.name)}
-                      className="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all opacity-0 group-hover:opacity-100"
-                      title="Supprimer la campagne"
-                    >
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-4v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
+                    <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                      {cp.dataSource === 'REAL_API' && (
+                        <button 
+                          onClick={() => refreshSingleCampaign(cp)}
+                          disabled={refreshingId === cp.id}
+                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+                          title="Actualiser les données Meta"
+                        >
+                          <svg className={`w-5 h-5 ${refreshingId === cp.id ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                        </button>
+                      )}
+                      <button 
+                        onClick={() => handleDelete(cp.id, cp.name)}
+                        className="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+                        title="Supprimer la campagne"
+                      >
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-4v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
               {filteredCampaigns.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-8 py-20 text-center text-slate-400 italic font-medium">
+                  <td colSpan={8} className="px-8 py-20 text-center text-slate-400 italic font-medium">
                     Aucune campagne trouvée. Importez des données via Meta ou vérifiez vos filtres.
                   </td>
                 </tr>
