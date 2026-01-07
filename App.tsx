@@ -28,28 +28,28 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const initCloud = async () => {
-      const data = await DB.fetchAll();
-      if (data) {
-        setClients(data.clients);
-        setCampaigns(data.campaigns);
-        setSecrets(data.secrets);
-        setUsers(data.users);
-        setAuditLogs(data.auditLogs);
-        setAiReports(data.aiReports);
+      try {
+        const data = await DB.fetchAll();
+        if (data) {
+          setClients(data.clients);
+          setCampaigns(data.campaigns);
+          setSecrets(data.secrets);
+          setUsers(data.users);
+          setAuditLogs(data.auditLogs);
+          setAiReports(data.aiReports);
+        }
+      } catch (err) {
+        console.error("Initialization failed:", err);
+      } finally {
+        setIsInitializing(false);
       }
-      setIsInitializing(false);
     };
     initCloud();
   }, []);
 
-  useEffect(() => { if (!isInitializing) DB.saveClients(clients); }, [clients, isInitializing]);
-  useEffect(() => { if (!isInitializing) DB.saveUsers(users); }, [users, isInitializing]);
-  useEffect(() => { if (!isInitializing) DB.saveCampaigns(campaigns); }, [campaigns, isInitializing]);
-
   const handleLogin = (u: User) => {
     setUser(u);
     localStorage.setItem('auth_session', JSON.stringify(u));
-    // Log login action
     DB.addAuditLog({
       id: Math.random().toString(36).substr(2, 9),
       timestamp: new Date().toISOString(),
@@ -70,7 +70,10 @@ const App: React.FC = () => {
     return (
       <div className="h-screen flex items-center justify-center bg-slate-900 text-white flex-col gap-4">
         <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-        <p className="font-black text-xl tracking-tighter uppercase italic">AdPulse Cloud Engine</p>
+        <div className="text-center">
+          <p className="font-black text-xl tracking-tighter uppercase italic">AdPulse Cloud Engine</p>
+          <p className="text-[10px] text-slate-400 uppercase tracking-widest mt-2">Connecting to Supabase...</p>
+        </div>
       </div>
     );
   }
@@ -85,7 +88,7 @@ const App: React.FC = () => {
           <Route path="/admin/campaigns" element={<AdminCampaigns clients={clients} setClients={setClients} campaigns={campaigns} setCampaigns={setCampaigns} secrets={secrets} />} />
           <Route path="/admin/sql-editor" element={<AdminSqlEditor clients={clients} campaigns={campaigns} secrets={secrets} users={users} auditLogs={auditLogs} aiReports={aiReports} />} />
           <Route path="/admin/settings" element={<AdminSettings secrets={secrets} setSecrets={setSecrets} />} />
-          <Route path="/client/dashboard/:clientId?" element={<ClientDashboard user={user} campaigns={campaigns} clients={clients} />} />
+          <Route path="/client/dashboard/:clientId?" element={<ClientDashboard user={user} campaigns={campaigns} clients={clients} secrets={secrets} />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

@@ -70,36 +70,47 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({
 
     setIsSyncing(true);
     setProgress(0);
-    setSyncLogs(['Début de l\'audit profond Meta Graph v19.0...']);
+    setSyncLogs(['Début de l\'audit sélectif Meta Graph v19.0...']);
 
     try {
       const token = await decryptSecret(fbSecret.value);
       let newCampaignsMap = new Map<string, CampaignStats>();
+      
+      // On garde les anciennes campagnes simulées ou non touchées par le filtre
       campaigns.forEach(c => newCampaignsMap.set(c.campaignId, c));
 
-      let updatedClients = [...clients];
       const AOV = 145.0; 
 
       for (let i = 0; i < clients.length; i++) {
         const client = clients[i];
-        log(`Scrutage : ${client.name}...`);
-        let clientCampaignIds = [...(client.campaignIds || [])];
+        
+        // On ne traite que les clients qui ont déjà des campagnes associées
+        if (!client.campaignIds || client.campaignIds.length === 0) {
+          log(`Saut : ${client.name} (Aucune campagne liée)`);
+          continue;
+        }
+
+        log(`Audit certifié : ${client.name}...`);
         
         for (const adAccountId of (client.adAccounts || [])) {
           try {
-            // Requête étendue pour capturer TOUTES les actions de conversion
+            // Extraction des données pour ce compte publicitaire
             const url = `https://graph.facebook.com/v19.0/${adAccountId}/campaigns?fields=name,status,id,insights.date_preset(maximum){spend,impressions,reach,frequency,clicks,actions}&access_token=${token}`;
             const res = await fetch(url);
             const data = await res.json();
 
             if (data.data) {
-              data.data.forEach((metaCp: any) => {
+              const matchedFromMeta = data.data.filter((metaCp: any) => 
+                client.campaignIds.includes(metaCp.id)
+              );
+
+              log(`${matchedFromMeta.length} campagnes valides trouvées pour ${client.name}`);
+
+              matchedFromMeta.forEach((metaCp: any) => {
                 const insight = metaCp.insights?.data?.[0] || {};
                 
-                // PARSING ROBUSTE DES ACTIONS
                 let totalConversions = 0;
                 if (insight.actions) {
-                  // On cherche les achats, les leads ou toute action de conversion personnalisée
                   const convActions = insight.actions.filter((a: any) => 
                     a.action_type.includes('purchase') || 
                     a.action_type.includes('lead') || 
@@ -115,19 +126,15 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({
                 const clicks = parseInt(insight.clicks) || 0;
                 const frequency = parseFloat(insight.frequency) || (reach > 0 ? impressions / reach : 1);
 
-                if (!clientCampaignIds.includes(metaCp.id)) clientCampaignIds.push(metaCp.id);
-
-                // Determining currency based on client name for demo consistency
                 const currency = client.name.toLowerCase().includes('fitness') ? 'USD' : 'EUR';
 
-                // Fix: Added missing 'currency' property to stats object
                 const stats: CampaignStats = {
                   id: newCampaignsMap.get(metaCp.id)?.id || `meta_${Math.random().toString(36).substr(2, 5)}`,
                   campaignId: metaCp.id,
                   name: metaCp.name,
                   date: new Date().toISOString(),
                   spend,
-                  currency, // Fixed: Added currency property
+                  currency,
                   impressions,
                   reach,
                   frequency,
@@ -141,29 +148,25 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({
                   status: metaCp.status === 'ACTIVE' ? 'ACTIVE' : 'PAUSED',
                   dataSource: 'REAL_API',
                   lastSync: new Date().toISOString(),
-                  isValidated: spend > 0, // Si on dépense, la donnée est valide
-                  auditLogs: [`Extraction complète : ${totalConversions} conv détectées.`]
+                  isValidated: true,
+                  auditLogs: [`Audit sélectif réussi : ${totalConversions} conversions.`]
                 };
 
                 newCampaignsMap.set(metaCp.id, stats);
               });
-              log(`${data.data.length} campagnes synchronisées pour ${client.name}`);
             }
           } catch (e) {
             log(`Erreur API sur compte ${adAccountId}`);
           }
         }
-        
-        updatedClients = updatedClients.map(c => c.id === client.id ? { ...c, campaignIds: clientCampaignIds } : c);
         setProgress(Math.round(((i + 1) / clients.length) * 100));
       }
 
       setCampaigns(Array.from(newCampaignsMap.values()));
-      setClients(updatedClients);
-      log('Audit terminé. Données prêtes pour le Dashboard.');
+      log('Audit des campagnes liées terminé.');
       setTimeout(() => setIsSyncing(false), 2000);
     } catch (err) {
-      log('Échec critique de l\'extraction.');
+      log('Échec critique de l\'audit.');
       setIsSyncing(false);
     }
   };
@@ -173,7 +176,7 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-4xl font-black text-slate-900 tracking-tight italic uppercase">Data Certification</h2>
-          <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">Moteur de synchronisation Meta Graph v19.0</p>
+          <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">Synchronisation sélective • Campagnes autorisées</p>
         </div>
         <button 
           onClick={runGlobalExtraction}
@@ -187,8 +190,8 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <HealthCard label="Source API" value={`${healthStats.integrity}%`} sub="Extraction Réelle" color="blue" />
-        <HealthCard label="Audit Conversions" value="ACTIF" sub="Deep Scanning Actions" color="emerald" />
-        <HealthCard label="Portefeuille" value={campaigns.length.toString()} sub="Campagnes" color="slate" />
+        <HealthCard label="Audit Conversions" value="SÉLECTIF" sub="Uniquement campagnes liées" color="emerald" />
+        <HealthCard label="Portefeuille" value={campaigns.length.toString()} sub="Total Campagnes" color="slate" />
         <HealthCard label="Spend Global" value={`$${healthStats.totalSpend.toLocaleString()}`} sub="Validé" color="indigo" />
       </div>
 

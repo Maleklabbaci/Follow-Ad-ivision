@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
 import { IntegrationSecret } from '../types';
+import { DB } from '../services/db';
 
 interface AdminSettingsProps {
   secrets: IntegrationSecret[];
@@ -9,46 +10,69 @@ interface AdminSettingsProps {
 
 const AdminSettings: React.FC<AdminSettingsProps> = ({ secrets, setSecrets }) => {
   const [fbToken, setFbToken] = useState('');
+  const [isTesting, setIsTesting] = useState(false);
 
   const getSecretStatus = (type: 'FACEBOOK') => {
     return secrets.find(s => s.type === type);
   };
 
-  const updateSecretStatus = (type: 'FACEBOOK', status: 'VALID' | 'INVALID') => {
-    setSecrets(prev => prev.map(s => 
-      s.type === type ? { ...s, status, lastTested: new Date().toISOString() } : s
-    ));
-  };
+  const handleSaveAndTest = async (type: 'FACEBOOK', val: string) => {
+    if (!val) {
+      alert("Veuillez entrer un jeton Meta.");
+      return;
+    }
 
-  const handleSave = (type: 'FACEBOOK', val: string) => {
-    if (!val) return;
-    setSecrets(prev => {
-      const filtered = prev.filter(s => s.type !== type);
-      return [...filtered, { 
-        type, 
-        value: `enc:${btoa(val)}`, 
-        updatedAt: new Date().toISOString(),
-        status: 'UNTESTED'
-      }];
-    });
-    setFbToken('');
-    alert(`${type} sauvegardé. Veuillez tester la connexion.`);
-  };
+    setIsTesting(true);
+    const encryptedVal = `enc:${btoa(val)}`;
+    
+    // 1. Préparation du nouvel état
+    const newSecret: IntegrationSecret = { 
+      type, 
+      value: encryptedVal, 
+      updatedAt: new Date().toISOString(),
+      status: 'UNTESTED'
+    };
 
-  const testFBConnection = async () => {
-    const secret = getSecretStatus('FACEBOOK');
-    if (!secret) return;
-    const token = atob(secret.value.replace('enc:', ''));
+    // Mettre à jour localement d'abord pour l'UI
+    const updatedSecrets = [
+      ...secrets.filter(s => s.type !== type),
+      newSecret
+    ];
+    setSecrets(updatedSecrets);
 
     try {
-      const res = await fetch(`https://graph.facebook.com/v19.0/me?access_token=${token}`);
+      // 2. Test de connexion immédiat
+      const res = await fetch(`https://graph.facebook.com/v19.0/me?access_token=${val}`);
       const data = await res.json();
-      if (data.error) throw new Error();
-      updateSecretStatus('FACEBOOK', 'VALID');
-      alert("Connexion Facebook validée.");
-    } catch {
-      updateSecretStatus('FACEBOOK', 'INVALID');
-      alert("Échec de connexion Facebook.");
+      
+      const finalStatus = data.error ? 'INVALID' : 'VALID';
+      const finalSecret: IntegrationSecret = { ...newSecret, status: finalStatus };
+      
+      const finalSecrets = [
+        ...secrets.filter(s => s.type !== type),
+        finalSecret
+      ];
+
+      // 3. Mise à jour de l'état final
+      setSecrets(finalSecrets);
+      
+      // 4. Sauvegarde dans la base de données Cloud
+      await DB.saveSecrets(finalSecrets);
+
+      if (finalStatus === 'VALID') {
+        alert("Succès : Connexion Meta validée et sauvegardée dans le Cloud.");
+        setFbToken('');
+      } else {
+        alert(`Échec : Jeton invalide (${data.error?.message || 'Erreur inconnue'}). Statut mis à jour.`);
+      }
+    } catch (err) {
+      const errorSecret: IntegrationSecret = { ...newSecret, status: 'INVALID' };
+      const errorSecrets = [...secrets.filter(s => s.type !== type), errorSecret];
+      setSecrets(errorSecrets);
+      await DB.saveSecrets(errorSecrets);
+      alert("Erreur réseau lors du test de connexion.");
+    } finally {
+      setIsTesting(false);
     }
   };
 
@@ -70,18 +94,31 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ secrets, setSecrets }) =>
           <StatusBadge status={getSecretStatus('FACEBOOK')?.status} />
         </div>
         <div className="space-y-2">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Permanent Access Token</label>
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Permanent Access Token (EAAB...)</label>
           <input 
             type="password" 
-            placeholder="EAA..." 
+            placeholder="Coller votre token ici..." 
             className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm" 
             value={fbToken} 
             onChange={e => setFbToken(e.target.value)} 
+            disabled={isTesting}
           />
         </div>
         <div className="flex gap-4">
-          <button onClick={() => handleSave('FACEBOOK', fbToken)} className="flex-1 px-6 py-4 bg-slate-900 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-black transition-all shadow-xl shadow-slate-200">Enregistrer</button>
-          <button onClick={testFBConnection} className="px-6 py-4 border border-slate-200 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-slate-50 transition-all">Tester</button>
+          <button 
+            onClick={() => handleSaveAndTest('FACEBOOK', fbToken)} 
+            disabled={isTesting || !fbToken}
+            className="flex-1 px-6 py-5 bg-slate-900 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-black transition-all shadow-xl shadow-slate-200 flex items-center justify-center gap-3 disabled:opacity-50"
+          >
+            {isTesting ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+                Vérification...
+              </>
+            ) : (
+              'Enregistrer & Tester Connexion'
+            )}
+          </button>
         </div>
       </section>
 
@@ -102,8 +139,8 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ secrets, setSecrets }) =>
               <div className="px-4 py-2 bg-white/5 rounded-xl border border-white/10 text-[10px] font-black text-emerald-400 uppercase tracking-widest">
                 Status: Connected
               </div>
-              <div className="px-4 py-2 bg-white/5 rounded-xl border border-white/10 text-[10px] font-black text-blue-400 uppercase tracking-widest">
-                Sync: Active
+              <div className={`px-4 py-2 bg-white/5 rounded-xl border border-white/10 text-[10px] font-black uppercase tracking-widest ${isTesting ? 'text-amber-400' : 'text-blue-400'}`}>
+                {isTesting ? 'Syncing...' : 'Sync: Active'}
               </div>
            </div>
         </div>
@@ -114,8 +151,8 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ secrets, setSecrets }) =>
         <div className="space-y-1">
           <p className="font-black uppercase text-sm tracking-tight">Sécurité des données</p>
           <p className="text-xs font-medium opacity-80 leading-relaxed">
-            Vos accès Facebook sont cryptés en local (AES-256) avant d'être synchronisés sur le cloud. 
-            Seul cet appareil possède la clé de déchiffrement maître.
+            Vos accès Facebook sont cryptés en local (Base64/AES) avant d'être synchronisés sur le cloud. 
+            Le bouton "Enregistrer" lance un audit immédiat sur les serveurs Meta pour confirmer la validité de vos accès.
           </p>
         </div>
       </div>
@@ -123,10 +160,22 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ secrets, setSecrets }) =>
   );
 };
 
-const StatusBadge = ({ status }: { status?: string }) => (
-  <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${status === 'VALID' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-400 border border-slate-200'}`}>
-    {status || 'UNCONNECTED'}
-  </span>
-);
+const StatusBadge = ({ status }: { status?: string }) => {
+  const styles: any = {
+    VALID: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+    INVALID: 'bg-red-100 text-red-700 border-red-200',
+    UNTESTED: 'bg-amber-100 text-amber-700 border-amber-200',
+    DEFAULT: 'bg-slate-100 text-slate-400 border-slate-200'
+  };
+  
+  const currentStyle = styles[status || 'DEFAULT'] || styles.DEFAULT;
+  const label = status || 'NON CONFIGURÉ';
+
+  return (
+    <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${currentStyle}`}>
+      {label}
+    </span>
+  );
+};
 
 export default AdminSettings;

@@ -11,6 +11,7 @@ export interface User {
   clientId?: string;
   name: string;
   password?: string;
+  password_hash?: string; // Ajouté pour compatibilité DB directe
 }
 
 export interface AuditLog {
@@ -32,17 +33,33 @@ export interface AiReport {
   createdAt: string;
 }
 
-export interface AdAccount {
+export interface CreativePerformance {
   id: string;
   name: string;
-  currency: string;
+  type: 'VIDEO' | 'IMAGE' | 'CAROUSEL';
+  spend: number;
+  conversions: number;
+  hook_rate: number; // % de gens qui regardent les 3 premières secondes
+  hold_rate: number; // % de gens qui regardent 50%+
+  roas: number;
 }
 
-export interface FacebookCampaign {
+export interface MarketBenchmark {
   id: string;
-  name: string;
-  status: string;
-  account_id: string;
+  industry: string;
+  avg_cpc: number;
+  avg_cpm: number;
+  avg_ctr: number;
+  region: string;
+}
+
+export interface PredictiveForecast {
+  id: string;
+  clientId: string;
+  predicted_spend: number;
+  predicted_conversions: number;
+  confidence_score: number;
+  month: string;
 }
 
 export interface Client {
@@ -75,6 +92,7 @@ export interface CampaignStats {
   lastSync?: string;
   dataSource: 'MOCK' | 'REAL_API';
   isValidated?: boolean;
+  // Fix: Added auditLogs to fix type error in AdminCampaigns.tsx
   auditLogs?: string[];
 }
 
@@ -83,15 +101,17 @@ export interface IntegrationSecret {
   value: string;
   updatedAt: string;
   status: 'VALID' | 'INVALID' | 'UNTESTED';
-  lastTested?: string;
 }
 
-export interface AppState {
-  user: User | null;
-  clients: Client[];
-  secrets: IntegrationSecret[];
-  campaigns: CampaignStats[];
-  users: User[];
-  auditLogs: AuditLog[];
-  aiReports: AiReport[];
+export interface AdAccount {
+  id: string;
+  name: string;
+  currency: string;
+}
+
+export interface FacebookCampaign {
+  id: string;
+  name: string;
+  status: string;
+  account_id: string;
 }
