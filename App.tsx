@@ -54,10 +54,10 @@ const App: React.FC = () => {
   });
 
   const sanitizeCampaign = useCallback((cp: any): CampaignStats => {
-    const spend = Math.max(0, parseFloat(cp.spend) || 0);
-    const clicks = Math.max(0, parseInt(cp.clicks) || 0);
-    const conv = Math.max(0, parseInt(cp.conversions) || 0);
-    const imps = Math.max(0, parseInt(cp.impressions) || 0);
+    const spend = Math.max(0, parseFloat(String(cp.spend)) || 0);
+    const clicks = Math.max(0, parseInt(String(cp.clicks)) || 0);
+    const conv = Math.max(0, parseInt(String(cp.conversions)) || 0);
+    const imps = Math.max(0, parseInt(String(cp.impressions)) || 0);
     const AOV = 145.00; 
 
     return {
@@ -80,15 +80,19 @@ const App: React.FC = () => {
     };
   }, []);
 
-  // Sync / Heal campaigns data on load
+  // Correction automatique des types corrompus en local storage
   useEffect(() => {
-    const needsHeal = campaigns.some(c => typeof c.spend === 'string' || isNaN(c.spend));
+    const needsHeal = campaigns.some(c => 
+      typeof c.spend !== 'number' || 
+      typeof c.clicks !== 'number' || 
+      isNaN(c.spend)
+    );
     if (needsHeal) {
       setCampaigns(prev => prev.map(sanitizeCampaign));
     }
   }, [campaigns.length, sanitizeCampaign]);
 
-  // AUTO-PROVISIONING with forced numbers
+  // Provisioning automatique pour les nouveaux clients (Data MOCK stable)
   useEffect(() => {
     if (clients.length === 0) return;
     const assignedIds = new Set(clients.flatMap(c => c.campaignIds || []));
@@ -102,11 +106,11 @@ const App: React.FC = () => {
           return sanitizeCampaign({
             campaignId: id,
             name: `Campaign ${id} (${owner?.name || 'New'})`,
-            spend: 500 + Math.random() * 1000, // Budget garanti
-            impressions: 25000 + Math.floor(Math.random() * 10000),
-            clicks: 500 + Math.floor(Math.random() * 500),
-            conversions: 45 + Math.floor(Math.random() * 30),
-            auditLogs: [`Auto-provisioned data generated for ${owner?.name || 'Client'}`]
+            spend: 850 + Math.random() * 2000, 
+            impressions: 45000 + Math.floor(Math.random() * 20000),
+            clicks: 1200 + Math.floor(Math.random() * 800),
+            conversions: 85 + Math.floor(Math.random() * 60),
+            auditLogs: [`Auto-provisioned data created for ${owner?.name || 'Client'}`]
           });
         });
         return [...prev, ...newEntries];
