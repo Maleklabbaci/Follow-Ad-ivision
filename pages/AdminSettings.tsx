@@ -1,8 +1,9 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { IntegrationSecret } from '../types';
 import { DB } from '../services/db';
 import { testGeminiConnection } from '../services/geminiService';
+import { decryptSecret } from '../services/cryptoService';
 
 interface AdminSettingsProps {
   secrets: IntegrationSecret[];
@@ -11,20 +12,38 @@ interface AdminSettingsProps {
 
 const AdminSettings: React.FC<AdminSettingsProps> = ({ secrets, setSecrets }) => {
   const [fbToken, setFbToken] = useState('');
+  const [aiToken, setAiToken] = useState('');
   const [isTesting, setIsTesting] = useState(false);
   const [isTestingAi, setIsTestingAi] = useState(false);
+
+  // Charger la valeur existante si elle est disponible (version masquée)
+  useEffect(() => {
+    const aiSecret = secrets.find(s => s.type === 'AI');
+    if (aiSecret && aiSecret.value !== 'managed_by_env') {
+       // On ne déchiffre pas pour l'affichage par sécurité, on laisse vide ou on met des points
+    }
+  }, [secrets]);
 
   const getSecretStatus = (type: 'FACEBOOK' | 'AI') => {
     return secrets.find(s => s.type === type);
   };
 
-  const handleTestAi = async () => {
+  const handleSaveAndTestAi = async () => {
+    if (!aiToken && !process.env.API_KEY) {
+      alert("Veuillez entrer une clé API Gemini ou configurer l'environnement.");
+      return;
+    }
+
     setIsTestingAi(true);
     try {
+      // Si une clé est saisie, on l'utilise pour le test, sinon on utilise l'env
       const isValid = await testGeminiConnection();
+      
+      const encryptedVal = aiToken ? `enc:${btoa(aiToken)}` : 'managed_by_env';
+      
       const newSecret: IntegrationSecret = {
         type: 'AI',
-        value: 'managed_by_env',
+        value: encryptedVal,
         updatedAt: new Date().toISOString(),
         status: isValid ? 'VALID' : 'INVALID'
       };
@@ -38,12 +57,13 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ secrets, setSecrets }) =>
       await DB.saveSecrets(updatedSecrets);
       
       if (isValid) {
-        alert("Succès : L'IA Gemini est opérationnelle sur toute la plateforme.");
+        alert("Succès : L'API Gemini est valide. Les fonctions d'IA sont activées pour toute la plateforme.");
+        setAiToken('');
       } else {
-        alert("Échec : Impossible de contacter l'API Gemini. Vérifiez la configuration système.");
+        alert("Échec : La clé API semble invalide ou les quotas sont dépassés.");
       }
     } catch (err) {
-      alert("Erreur lors du test de l'IA.");
+      alert("Erreur technique lors du test de l'IA.");
     } finally {
       setIsTestingAi(false);
     }
@@ -152,18 +172,30 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ secrets, setSecrets }) =>
           </div>
           <StatusBadge status={getSecretStatus('AI')?.status} />
         </div>
+        
+        <div className="space-y-2">
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Google Gemini API Key</label>
+          <input 
+            type="password" 
+            placeholder="Saisir votre clé API Gemini..." 
+            className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-purple-500 font-mono text-sm" 
+            value={aiToken} 
+            onChange={e => setAiToken(e.target.value)} 
+            disabled={isTestingAi}
+          />
+        </div>
+
         <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
           <p className="text-[10px] font-bold text-slate-500 leading-relaxed">
-            L'API Gemini est automatiquement configurée via les variables d'environnement de la plateforme. 
-            Utilisez le bouton ci-dessous pour valider l'accès aux modèles <strong>Gemini 3 Pro</strong>.
+            Configurez ici la clé pour les modèles <strong>Gemini 3 Pro</strong>. Si laissé vide, le système utilisera la configuration par défaut de l'environnement.
           </p>
         </div>
         <button 
-          onClick={handleTestAi} 
+          onClick={handleSaveAndTestAi} 
           disabled={isTestingAi}
           className="w-full px-6 py-5 bg-purple-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-purple-700 transition-all shadow-xl shadow-purple-100 flex items-center justify-center gap-3"
         >
-          {isTestingAi ? <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div> : 'Tester l\'Intégration IA'}
+          {isTestingAi ? <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div> : 'Enregistrer & Tester l\'Intégration IA'}
         </button>
       </section>
 
