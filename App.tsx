@@ -58,6 +58,7 @@ const App: React.FC = () => {
     const clicks = Math.max(0, parseInt(String(cp.clicks)) || 0);
     const conv = Math.max(0, parseInt(String(cp.conversions)) || 0);
     const imps = Math.max(0, parseInt(String(cp.impressions)) || 0);
+    const reach = Math.max(0, parseInt(String(cp.reach)) || Math.round(imps * 0.8));
     const AOV = 145.00; 
 
     return {
@@ -69,8 +70,12 @@ const App: React.FC = () => {
       clicks: clicks,
       conversions: conv,
       impressions: imps,
+      reach: reach,
+      frequency: reach > 0 ? imps / reach : 1,
       ctr: imps > 0 ? (clicks / imps) : 0,
       cpc: clicks > 0 ? (spend / clicks) : 0,
+      cpm: imps > 0 ? (spend / imps) * 1000 : 0,
+      cpa: conv > 0 ? spend / conv : 0,
       roas: spend > 0 ? (conv * AOV) / spend : 0,
       lastSync: cp.lastSync || new Date().toISOString(),
       isValidated: !!cp.isValidated,
@@ -80,19 +85,13 @@ const App: React.FC = () => {
     };
   }, []);
 
-  // Correction automatique des types corrompus en local storage
   useEffect(() => {
-    const needsHeal = campaigns.some(c => 
-      typeof c.spend !== 'number' || 
-      typeof c.clicks !== 'number' || 
-      isNaN(c.spend)
-    );
+    const needsHeal = campaigns.some(c => typeof c.spend !== 'number' || !c.reach);
     if (needsHeal) {
       setCampaigns(prev => prev.map(sanitizeCampaign));
     }
   }, [campaigns.length, sanitizeCampaign]);
 
-  // Provisioning automatique pour les nouveaux clients (Data MOCK stable)
   useEffect(() => {
     if (clients.length === 0) return;
     const assignedIds = new Set(clients.flatMap(c => c.campaignIds || []));
@@ -110,7 +109,7 @@ const App: React.FC = () => {
             impressions: 45000 + Math.floor(Math.random() * 20000),
             clicks: 1200 + Math.floor(Math.random() * 800),
             conversions: 85 + Math.floor(Math.random() * 60),
-            auditLogs: [`Auto-provisioned data created for ${owner?.name || 'Client'}`]
+            dataSource: 'MOCK'
           });
         });
         return [...prev, ...newEntries];

@@ -28,11 +28,9 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({
   const healthStats = useMemo(() => {
     const total = Array.isArray(campaigns) ? campaigns.length : 0;
     const real = campaigns.filter(c => c?.dataSource === 'REAL_API').length;
-    const validated = campaigns.filter(c => c?.isValidated).length;
     const totalSpend = campaigns.reduce((sum, c) => sum + (Number(c?.spend) || 0), 0);
     return {
       integrity: total > 0 ? Math.round((real / total) * 100) : 0,
-      validationRate: total > 0 ? Math.round((validated / total) * 100) : 0,
       totalSpend
     };
   }, [campaigns]);
@@ -67,7 +65,7 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({
   const runGlobalExtraction = async () => {
     const fbSecret = secrets.find(s => s.type === 'FACEBOOK');
     if (!fbSecret || fbSecret.status !== 'VALID') {
-      alert("Configuration Meta API requise. Allez dans Paramètres pour valider votre token.");
+      alert("Configuration Meta API requise.");
       return;
     }
 
@@ -85,22 +83,20 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({
 
       for (let i = 0; i < clients.length; i++) {
         const client = clients[i];
-        log(`Client : ${client.name}...`);
+        log(`Analyse Client : ${client.name}...`);
         let clientCampaignIds = [...(client.campaignIds || [])];
         
         for (const adAccountId of (client.adAccounts || [])) {
           try {
-            // Extraction avec le champ 'actions' pour capturer les achats (conversions)
-            const url = `https://graph.facebook.com/v19.0/${adAccountId}/campaigns?fields=name,status,id,insights.date_preset(maximum){spend,impressions,clicks,actions}&access_token=${token}`;
+            // Requête complète incluant reach, frequency, impressions, spend et actions
+            const url = `https://graph.facebook.com/v19.0/${adAccountId}/campaigns?fields=name,status,id,insights.date_preset(maximum){spend,impressions,reach,frequency,clicks,actions}&access_token=${token}`;
             const res = await fetch(url);
             const data = await res.json();
 
             if (data.data) {
-              log(`${data.data.length} campagnes trouvées sur ${adAccountId}`);
               data.data.forEach((metaCp: any) => {
                 const insight = metaCp.insights?.data?.[0] || {};
                 
-                // Extraction intelligente des conversions (Achats)
                 let conversions = 0;
                 if (insight.actions && Array.isArray(insight.actions)) {
                   const purchaseAction = insight.actions.find((a: any) => 
@@ -112,10 +108,10 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({
                 const spend = parseFloat(insight.spend) || 0;
                 const clicks = parseInt(insight.clicks) || 0;
                 const impressions = parseInt(insight.impressions) || 0;
+                const reach = parseInt(insight.reach) || 0;
+                const frequency = parseFloat(insight.frequency) || (reach > 0 ? impressions / reach : 1);
 
-                if (!clientCampaignIds.includes(metaCp.id)) {
-                  clientCampaignIds.push(metaCp.id);
-                }
+                if (!clientCampaignIds.includes(metaCp.id)) clientCampaignIds.push(metaCp.id);
 
                 const stats: CampaignStats = {
                   id: newCampaignsMap.get(metaCp.id)?.id || `ext_${Math.random().toString(36).substr(2, 9)}`,
@@ -124,52 +120,47 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({
                   date: new Date().toISOString(),
                   spend,
                   impressions,
+                  reach,
+                  frequency,
                   clicks,
                   conversions,
                   ctr: impressions > 0 ? clicks / impressions : 0,
                   cpc: clicks > 0 ? spend / clicks : 0,
+                  cpm: impressions > 0 ? (spend / impressions) * 1000 : 0,
+                  cpa: conversions > 0 ? spend / conversions : 0,
                   roas: spend > 0 ? (conversions * AOV) / spend : 0,
                   status: metaCp.status === 'ACTIVE' ? 'ACTIVE' : 'PAUSED',
                   dataSource: 'REAL_API',
                   lastSync: new Date().toISOString(),
                   isValidated: spend > 0 && impressions > 0,
-                  auditLogs: [`Sync Meta API complète effectuée.`]
+                  auditLogs: [`Sync Meta API complète effectuée avec succès.`]
                 };
 
                 newCampaignsMap.set(metaCp.id, stats);
               });
             }
           } catch (e) {
-            log(`Erreur sur ${adAccountId}`);
+            log(`Erreur sur le compte ${adAccountId}`);
           }
         }
         
-        updatedClients = updatedClients.map(c => 
-          c.id === client.id ? { ...c, campaignIds: clientCampaignIds } : c
-        );
+        updatedClients = updatedClients.map(c => c.id === client.id ? { ...c, campaignIds: clientCampaignIds } : c);
         setProgress(Math.round(((i + 1) / clients.length) * 100));
       }
 
       setCampaigns(Array.from(newCampaignsMap.values()));
       setClients(updatedClients);
-      log('Extraction terminée avec succès.');
+      log('Extraction terminée. Données synchronisées.');
       setTimeout(() => setIsSyncing(false), 1500);
     } catch (err) {
-      log('Échec de la synchronisation.');
+      log('Échec de l\'extraction.');
       setIsSyncing(false);
     }
   };
 
   const handleDelete = (id: string, name: string) => {
-    if (window.confirm(`Supprimer définitivement les données de ${name} ?`)) {
-      const target = campaigns.find(c => c.id === id);
+    if (window.confirm(`Supprimer les données de ${name} ?`)) {
       setCampaigns(prev => prev.filter(c => c.id !== id));
-      if (target) {
-        setClients(prev => prev.map(c => ({
-          ...c,
-          campaignIds: (c.campaignIds || []).filter(cid => cid !== target.campaignId)
-        })));
-      }
     }
   };
 
@@ -178,11 +169,9 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({
       const ids = Array.isArray(client.campaignIds) ? client.campaignIds : [];
       const isCurrentOwner = ids.includes(campaignId);
       const isTarget = client.id === targetClientId;
-
       let newIds = [...ids];
       if (isCurrentOwner && !isTarget) newIds = newIds.filter(id => id !== campaignId);
       if (isTarget && !isCurrentOwner) newIds.push(campaignId);
-      
       return { ...client, campaignIds: newIds };
     }));
     setLinkingCampaignId(null);
@@ -192,26 +181,26 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({
     <div className="space-y-8 animate-in fade-in duration-500 pb-20">
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
         <div>
-          <h2 className="text-4xl font-black text-slate-900 tracking-tight italic">DATA CENTER</h2>
-          <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">Moteur d'extraction Meta Graph v19.0</p>
+          <h2 className="text-4xl font-black text-slate-900 tracking-tight italic">DATA AUDIT CENTER</h2>
+          <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">Moteur d'extraction Haute Précision v19.0</p>
         </div>
         <button 
           onClick={runGlobalExtraction}
           disabled={isSyncing}
-          className="group relative px-8 py-4 bg-blue-600 text-white rounded-2xl font-black text-sm hover:bg-blue-700 transition-all shadow-xl shadow-blue-100 flex items-center gap-3"
+          className="px-8 py-4 bg-blue-600 text-white rounded-2xl font-black text-sm hover:bg-blue-700 transition-all shadow-xl shadow-blue-100 flex items-center gap-3"
         >
           <svg className={`w-5 h-5 ${isSyncing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
-          <span className="relative z-10">{isSyncing ? 'EXTRACTION...' : 'TOUT EXTRAIRE (META)'}</span>
+          {isSyncing ? 'EXTRACTION...' : 'TOUT EXTRAIRE (META)'}
         </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <HealthCard label="Source API" value={`${healthStats.integrity}%`} sub="Data Réelle" color="blue" />
-        <HealthCard label="Statut Conversion" value="CERTIFIÉ" sub="Via Actions Array" color="emerald" />
-        <HealthCard label="Campagnes" value={campaigns.length.toString()} sub="En Registre" color="slate" />
-        <HealthCard label="Budget Global" value={`$${healthStats.totalSpend.toLocaleString()}`} sub="Sync Maximum" color="indigo" />
+        <HealthCard label="Source API" value={`${healthStats.integrity}%`} sub="Certifié Live" color="blue" />
+        <HealthCard label="Précision Conversion" value="MAX" sub="Détail par Action" color="emerald" />
+        <HealthCard label="Campagnes" value={campaigns.length.toString()} sub="En Base" color="slate" />
+        <HealthCard label="Budget Global" value={`$${healthStats.totalSpend.toLocaleString()}`} sub="Sync Automatique" color="indigo" />
       </div>
 
       <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
@@ -219,21 +208,13 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({
           <h3 className="text-2xl font-black text-slate-800 tracking-tight">Registre Centralisé</h3>
           <div className="flex gap-4 w-full sm:w-auto">
             <select 
-              className="px-5 py-3 bg-white border border-slate-200 rounded-2xl text-xs outline-none font-black uppercase tracking-widest shadow-sm"
+              className="px-5 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-black outline-none uppercase shadow-sm"
               value={filterClient}
               onChange={e => setFilterClient(e.target.value)}
             >
               <option value="all">Tous les clients</option>
-              <option value="unassigned">Non assignées</option>
               {clients?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
-            <input 
-              type="text" 
-              placeholder="Filtrer..." 
-              className="flex-1 sm:w-80 px-5 py-3 border rounded-2xl text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500 transition-all shadow-sm"
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-            />
           </div>
         </div>
 
@@ -242,51 +223,29 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({
             <thead>
               <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
                 <th className="px-10 py-6">Campagne</th>
-                <th className="px-10 py-6">Client</th>
-                <th className="px-10 py-6 text-right">Budget</th>
+                <th className="px-10 py-6">Propriétaire</th>
+                <th className="px-10 py-6 text-right">Dépense</th>
                 <th className="px-10 py-6 text-right">Conv.</th>
-                <th className="px-10 py-6 text-right">CPC</th>
-                <th className="px-10 py-6 text-right">Action</th>
+                <th className="px-10 py-6 text-right">CPM</th>
+                <th className="px-10 py-6 text-right">ROAS</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredCampaigns.map(cp => (
-                <tr key={cp.id} className="hover:bg-slate-50 transition-all group">
+                <tr key={cp.id} className="hover:bg-slate-50 transition-all">
                   <td className="px-10 py-8">
                     <div className="font-black text-slate-900">{cp.name}</div>
-                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">ID: {cp.campaignId}</div>
+                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">ID: {cp.campaignId}</div>
                   </td>
-                  <td className="px-10 py-8 font-bold text-slate-600">
-                    {linkingCampaignId === cp.campaignId ? (
-                      <select 
-                        className="px-4 py-2 border-2 border-blue-500 rounded-xl text-xs font-bold bg-white"
-                        autoFocus
-                        value={cp.clientId || ''}
-                        onChange={(e) => handleLinkClient(cp.campaignId, e.target.value)}
-                        onBlur={() => setLinkingCampaignId(null)}
-                      >
-                        <option value="">-- DÉTACHER --</option>
-                        {clients?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                      </select>
-                    ) : (
-                      <button 
-                        onClick={() => setLinkingCampaignId(cp.campaignId)}
-                        className="text-blue-600 hover:underline"
-                      >
-                        {cp.clientName}
-                      </button>
-                    )}
-                  </td>
-                  <td className="px-10 py-8 text-right font-black text-slate-900 tabular-nums">${cp.spend.toLocaleString()}</td>
-                  <td className={`px-10 py-8 text-right font-black tabular-nums ${cp.conversions > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
-                    {cp.conversions}
-                  </td>
-                  <td className="px-10 py-8 text-right font-bold text-slate-500 tabular-nums">${cp.cpc.toFixed(2)}</td>
-                  <td className="px-10 py-8 text-right">
-                    <button onClick={() => handleDelete(cp.id, cp.name)} className="p-2 text-slate-300 hover:text-red-600 transition-colors">
-                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-4v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                  <td className="px-10 py-8">
+                    <button onClick={() => setLinkingCampaignId(cp.campaignId)} className="text-blue-600 font-bold hover:underline">
+                      {cp.clientName}
                     </button>
                   </td>
+                  <td className="px-10 py-8 text-right font-black text-slate-900">${cp.spend.toLocaleString()}</td>
+                  <td className="px-10 py-8 text-right font-black text-emerald-600">{cp.conversions}</td>
+                  <td className="px-10 py-8 text-right font-bold text-slate-400">${cp.cpm.toFixed(2)}</td>
+                  <td className="px-10 py-8 text-right font-black text-blue-600">{cp.roas.toFixed(2)}x</td>
                 </tr>
               ))}
             </tbody>
@@ -297,11 +256,8 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({
       {isSyncing && (
         <div className="fixed bottom-10 right-10 w-96 bg-slate-900 text-white rounded-[2rem] p-8 shadow-2xl z-50 border border-white/10">
           <div className="flex justify-between items-center mb-6">
-            <span className="text-xs font-black uppercase tracking-widest text-blue-400">Sync en cours...</span>
+            <span className="text-xs font-black uppercase tracking-widest text-blue-400">Sync Meta...</span>
             <span className="text-xs font-bold">{progress}%</span>
-          </div>
-          <div className="space-y-1 h-20 overflow-hidden text-[9px] font-mono opacity-50 mb-4">
-            {syncLogs.slice(0, 4).map((l, i) => <div key={i}>➜ {l}</div>)}
           </div>
           <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
             <div className="bg-blue-500 h-full transition-all duration-300" style={{ width: `${progress}%` }}></div>
@@ -314,10 +270,10 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({
 
 const HealthCard = ({ label, value, sub, color }: any) => {
   const themes: any = {
-    blue: 'bg-blue-600 text-white shadow-xl shadow-blue-100',
-    emerald: 'bg-emerald-500 text-white shadow-xl shadow-emerald-100',
+    blue: 'bg-blue-600 text-white',
+    emerald: 'bg-emerald-500 text-white',
     slate: 'bg-white border-slate-200 text-slate-900',
-    indigo: 'bg-indigo-600 text-white shadow-xl shadow-indigo-100',
+    indigo: 'bg-indigo-600 text-white',
   };
   return (
     <div className={`p-8 rounded-[2rem] border transition-all ${themes[color] || themes.slate} shadow-sm`}>

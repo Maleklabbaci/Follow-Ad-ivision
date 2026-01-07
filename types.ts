@@ -41,10 +41,14 @@ export interface CampaignStats {
   date: string;
   spend: number;
   impressions: number;
+  reach: number;
+  frequency: number;
   clicks: number;
   conversions: number;
   ctr: number;
   cpc: number;
+  cpm: number;
+  cpa: number;
   roas: number;
   status: 'ACTIVE' | 'PAUSED' | 'ARCHIVED';
   lastSync?: string;
