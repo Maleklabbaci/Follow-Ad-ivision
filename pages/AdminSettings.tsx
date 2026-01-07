@@ -1,7 +1,8 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { IntegrationSecret } from '../types';
 import { DB } from '../services/db';
+import { testGeminiConnection } from '../services/geminiService';
+import { decryptSecret } from '../services/cryptoService';
 
 interface AdminSettingsProps {
   secrets: IntegrationSecret[];
@@ -10,10 +11,53 @@ interface AdminSettingsProps {
 
 const AdminSettings: React.FC<AdminSettingsProps> = ({ secrets, setSecrets }) => {
   const [fbToken, setFbToken] = useState('');
+  const [aiToken, setAiToken] = useState('');
   const [isTesting, setIsTesting] = useState(false);
+  const [isTestingAi, setIsTestingAi] = useState(false);
 
   const getSecretStatus = (type: 'FACEBOOK' | 'AI') => {
     return secrets.find(s => s.type === type);
+  };
+
+  const handleSaveAndTestAi = async () => {
+    const trimmedKey = aiToken.trim();
+    if (!trimmedKey && !process.env.API_KEY) {
+      alert("Veuillez saisir une clé API valide.");
+      return;
+    }
+
+    setIsTestingAi(true);
+    try {
+      const isValid = await testGeminiConnection(trimmedKey || undefined);
+      
+      const encryptedVal = trimmedKey ? `enc:${btoa(trimmedKey)}` : 'managed_by_env';
+      
+      const newSecret: IntegrationSecret = {
+        type: 'AI',
+        value: encryptedVal,
+        updatedAt: new Date().toISOString(),
+        status: isValid ? 'VALID' : 'INVALID'
+      };
+
+      const updatedSecrets = [
+        ...secrets.filter(s => s.type !== 'AI'),
+        newSecret
+      ];
+      
+      setSecrets(updatedSecrets);
+      await DB.saveSecrets(updatedSecrets);
+      
+      if (isValid) {
+        alert("FÉLICITATIONS : L'intelligence artificielle est maintenant active sur toute votre plateforme.");
+        setAiToken('');
+      } else {
+        alert("ERREUR : La clé n'a pas pu être validée. Assurez-vous d'utiliser une clé API Google Gemini valide (commençant souvent par AIza...).");
+      }
+    } catch (err) {
+      alert("Erreur technique lors de la validation.");
+    } finally {
+      setIsTestingAi(false);
+    }
   };
 
   const handleSaveAndTest = async (type: 'FACEBOOK', val: string) => {
@@ -79,7 +123,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ secrets, setSecrets }) =>
         </div>
       </div>
 
-      {/* IA Section - Note: Gemini API Key is exclusively managed via environment variables */}
+      {/* IA Section - Focus on Compatibility */}
       <section className="bg-slate-900 p-10 rounded-[2.5rem] border border-white/5 shadow-2xl relative overflow-hidden group">
         <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
            <svg className="w-32 h-32 text-purple-400" fill="currentColor" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
@@ -93,16 +137,44 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ secrets, setSecrets }) =>
                </div>
                <h3 className="text-xl font-black text-white uppercase italic tracking-tight">IA Intelligence Core</h3>
             </div>
-            <span className="px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border bg-emerald-500/20 text-emerald-400 border-emerald-500/30">
-              ACTIVE
-            </span>
+            <StatusBadge status={getSecretStatus('AI')?.status} isDark />
+          </div>
+          
+          <div className="space-y-3">
+            <div className="flex justify-between items-end px-1">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">IA API Key (Google Engine)</label>
+              <a 
+                href="https://aistudio.google.com/app/apikey" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-[9px] font-black text-purple-400 uppercase tracking-widest hover:text-purple-300 transition-colors underline"
+              >
+                Obtenir une clé gratuite ↗
+              </a>
+            </div>
+            <input 
+              type="password" 
+              placeholder="Ex: AIzaSyB..." 
+              className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl outline-none focus:ring-2 focus:ring-purple-500 font-mono text-sm text-purple-200 placeholder:text-slate-700" 
+              value={aiToken} 
+              onChange={e => setAiToken(e.target.value)} 
+              disabled={isTestingAi}
+            />
           </div>
 
           <div className="p-4 bg-purple-500/5 rounded-2xl border border-purple-500/10">
-            <p className="text-[11px] font-bold text-slate-300 leading-relaxed italic">
-              L'intelligence artificielle ADiVISION est pilotée par le moteur Google Gemini 3 Flash. La connectivité est gérée de manière sécurisée par l'infrastructure cloud via des variables d'environnement.
+            <p className="text-[10px] font-bold text-slate-400 leading-relaxed italic">
+              Note : La plateforme utilise actuellement le moteur **Gemini** pour sa rapidité. Assurez-vous d'utiliser une clé issue de Google AI Studio. Les clés OpenAI/Claude ne sont pas compatibles avec ce module.
             </p>
           </div>
+
+          <button 
+            onClick={handleSaveAndTestAi} 
+            disabled={isTestingAi}
+            className="w-full px-6 py-5 bg-purple-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-purple-700 transition-all shadow-xl shadow-purple-900/40 flex items-center justify-center gap-3 active:scale-[0.98]"
+          >
+            {isTestingAi ? <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div> : 'ACTIVER L\'INTELLIGENCE ARTIFICIELLE'}
+          </button>
         </div>
       </section>
 

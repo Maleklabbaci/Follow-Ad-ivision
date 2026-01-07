@@ -1,3 +1,4 @@
+
 export interface ExchangeRates {
   [key: string]: number;
 }
@@ -17,32 +18,23 @@ class ExchangeService {
       const data = await response.json();
       
       if (data.result === 'success') {
-        // We curate the list to keep it clean, as requested: "Keep USD and add DZD"
-        // We include a few others for common utility, but ensure DZD is at the requested rate.
-        const importantCodes = ['USD', 'EUR', 'GBP', 'CAD', 'AED'];
-        const rates: ExchangeRates = {};
-        
-        importantCodes.forEach(code => {
-          if (data.rates[code]) rates[code] = data.rates[code];
-        });
-
-        // Inject DZD with the specific requested fixed rate (1 USD = 272 DZD)
-        rates['DZD'] = 272;
-        
         this.cache = {
-          rates,
+          rates: data.rates,
           timestamp: Date.now()
         };
-        return rates;
+        return data.rates;
       }
       throw new Error('Failed to fetch rates');
     } catch (error) {
       console.error('Exchange rates fetch error:', error);
-      // Fallback rates if API is down, strictly including USD and the requested DZD rate.
+      // Fallback rates if API is down
       return {
         USD: 1,
         EUR: 0.92,
-        DZD: 272
+        GBP: 0.78,
+        CAD: 1.36,
+        AUD: 1.51,
+        JPY: 157.50
       };
     }
   }

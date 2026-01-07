@@ -1,8 +1,9 @@
+
 import { Client, CampaignStats, IntegrationSecret, User, AuditLog, AiReport } from '../types';
 import { supabase } from './supabase';
 
 class DatabaseEngine {
-  private LOCAL_STORAGE_KEY = 'adivision_local_db';
+  private LOCAL_STORAGE_KEY = 'adpulse_local_db';
 
   /**
    * Note: The currency formatting is now handled via the useCurrency hook

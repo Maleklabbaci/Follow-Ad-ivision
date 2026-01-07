@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { User, UserRole } from '../types';
@@ -42,7 +43,7 @@ const Sidebar: React.FC<SidebarProps> = ({ user, onLogout, isMobile = false, mob
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
             </svg>
           </div>
-          <span className="text-2xl font-black text-slate-900 tracking-tighter italic">ADiVISION</span>
+          <span className="text-2xl font-black text-slate-900 tracking-tighter italic">ADPULSE</span>
         </div>
 
         <nav className="space-y-1.5">

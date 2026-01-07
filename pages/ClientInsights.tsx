@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { User, CampaignStats, Client, IntegrationSecret } from '../types';
 import { getCampaignInsights } from '../services/geminiService';
+import { decryptSecret } from '../services/cryptoService';
 
 interface ClientInsightsProps {
   user: User;
@@ -16,7 +17,7 @@ const ClientInsights: React.FC<ClientInsightsProps> = ({ user, campaigns = [], s
 
   const clientCampaigns = useMemo(() => {
     if (!user?.clientId) return [];
-    const savedClientsRaw = localStorage.getItem('adivision_local_db');
+    const savedClientsRaw = localStorage.getItem('adpulse_local_db');
     let clientCampaignIds: string[] = [];
     try {
       const db = JSON.parse(savedClientsRaw || '{}');
@@ -33,7 +34,12 @@ const ClientInsights: React.FC<ClientInsightsProps> = ({ user, campaigns = [], s
     setShowModal(true);
     setInsights(null);
     try {
-      const result = await getCampaignInsights(clientCampaigns, selectedLang);
+      const aiSecret = secrets.find(s => s.type === 'AI');
+      let apiKey = (aiSecret && aiSecret.value !== 'managed_by_env') 
+        ? await decryptSecret(aiSecret.value) 
+        : undefined;
+
+      const result = await getCampaignInsights(clientCampaigns, apiKey, selectedLang);
       setInsights(result);
     } catch (err: any) {
       setInsights("Une erreur est survenue lors de l'analyse stratégique. Vérifiez votre connexion.");

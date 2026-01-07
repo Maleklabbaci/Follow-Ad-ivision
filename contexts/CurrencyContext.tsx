@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { exchangeService, ExchangeRates } from '../services/exchangeService';
 
@@ -13,21 +14,15 @@ interface CurrencyContextType {
 const CurrencyContext = createContext<CurrencyContextType | undefined>(undefined);
 
 export const CurrencyProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Default to USD as requested ("Laisse le USD")
   const [currency, setCurrencyState] = useState(() => localStorage.getItem('app_currency') || 'USD');
-  const [rates, setRates] = useState<ExchangeRates>({ USD: 1, DZD: 272 });
+  const [rates, setRates] = useState<ExchangeRates>({ USD: 1 });
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchRates = useCallback(async () => {
     setIsLoading(true);
-    try {
-      const newRates = await exchangeService.getRates('USD');
-      setRates(newRates);
-    } catch (err) {
-      console.error("Failed to load rates, using fallbacks");
-    } finally {
-      setIsLoading(false);
-    }
+    const newRates = await exchangeService.getRates('USD');
+    setRates(newRates);
+    setIsLoading(false);
   }, []);
 
   useEffect(() => {
@@ -48,16 +43,12 @@ export const CurrencyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const format = useCallback((amount: number, from: string = 'USD', precision?: number) => {
     const converted = convert(amount, from);
-    
-    // Custom formatting for DZD to use "DA" or "DZD" clearly
-    const options: Intl.NumberFormatOptions = {
+    return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: currency,
-      minimumFractionDigits: precision !== undefined ? precision : (converted > 100 ? 0 : 2),
-      maximumFractionDigits: precision !== undefined ? precision : (converted > 100 ? 0 : 2)
-    };
-
-    return new Intl.NumberFormat(currency === 'DZD' ? 'fr-DZ' : 'en-US', options).format(converted);
+      minimumFractionDigits: precision !== undefined ? precision : (converted > 1000 ? 0 : 2),
+      maximumFractionDigits: precision !== undefined ? precision : (converted > 1000 ? 0 : 2)
+    }).format(converted);
   }, [convert, currency]);
 
   return (

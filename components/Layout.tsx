@@ -1,11 +1,9 @@
-
 import React, { useMemo, useState } from 'react';
 import { Outlet, useLocation, useParams, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { User, Client, UserRole, IntegrationSecret } from '../types';
 import { useCurrency } from '../contexts/CurrencyContext';
-import ADiVISIONChatbot from './AdPulseChatbot';
-import ShakeReporter from './ShakeReporter';
+import AdPulseChatbot from './AdPulseChatbot';
 
 interface LayoutProps {
   user: User;
@@ -31,18 +29,6 @@ const Layout: React.FC<LayoutProps> = ({ user, onLogout, clients, secrets = [] }
   }, [isImpersonating, clients, clientId]);
 
   const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
-
-  // Sort currencies to put USD and DZD first as requested
-  const sortedCurrencyCodes = useMemo(() => {
-    const codes = Object.keys(rates);
-    return codes.sort((a, b) => {
-      if (a === 'USD') return -1;
-      if (b === 'USD') return 1;
-      if (a === 'DZD') return -1;
-      if (b === 'DZD') return 1;
-      return a.localeCompare(b);
-    });
-  }, [rates]);
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50">
@@ -96,25 +82,19 @@ const Layout: React.FC<LayoutProps> = ({ user, onLogout, clients, secrets = [] }
           </div>
           
           <div className="flex items-center gap-2 md:gap-6">
-            <div className="flex items-center bg-slate-950 text-white rounded-xl px-3 py-1.5 gap-2 border border-white/10 shadow-lg group hover:bg-black transition-all">
-              <div className="flex items-center gap-1.5 border-r border-white/20 pr-2">
-                <svg className="w-3.5 h-3.5 text-blue-400 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span className="text-[10px] font-black uppercase tracking-widest hidden sm:inline">Node</span>
-              </div>
+            <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl px-2 py-1 gap-1">
+              <svg className="w-3 h-3 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
               <select 
                 value={currency} 
                 onChange={(e) => setCurrency(e.target.value)}
-                className="bg-transparent text-[11px] font-black uppercase tracking-widest outline-none border-none cursor-pointer appearance-none hover:text-blue-400 transition-colors"
+                className="bg-transparent text-[10px] font-black uppercase tracking-widest outline-none border-none cursor-pointer"
               >
-                {sortedCurrencyCodes.map(cur => (
-                  <option key={cur} value={cur} className="bg-slate-900 text-white font-black">{cur}</option>
+                {Object.keys(rates).map(cur => (
+                  <option key={cur} value={cur}>{cur}</option>
                 ))}
               </select>
-              <svg className="w-3 h-3 text-white/40 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" />
-              </svg>
             </div>
 
             <div className="flex items-center gap-3">
@@ -136,8 +116,8 @@ const Layout: React.FC<LayoutProps> = ({ user, onLogout, clients, secrets = [] }
         </main>
       </div>
 
-      <ADiVISIONChatbot secrets={secrets} />
-      <ShakeReporter />
+      {/* Global AI Chatbot */}
+      <AdPulseChatbot secrets={secrets} />
     </div>
   );
 };

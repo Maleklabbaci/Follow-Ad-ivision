@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { User, UserRole } from '../types';
 
@@ -22,10 +23,10 @@ const Login: React.FC<LoginProps> = ({ onLogin, users = [] }) => {
       const userList = Array.isArray(users) ? users : [];
       
       // DEFAULT ADMIN FALLBACK (For initial setup or DB issues)
-      if (email.toLowerCase() === 'admin@adivision.ai' && password === 'admin123') {
+      if (email.toLowerCase() === 'admin@adpulse.ai' && password === 'admin123') {
         onLogin({
           id: 'admin_root',
-          email: 'admin@adivision.ai',
+          email: 'admin@adpulse.ai',
           name: 'Super Admin',
           role: UserRole.ADMIN
         });
@@ -33,7 +34,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, users = [] }) => {
       }
 
       if (userList.length === 0) {
-        setError("Base Cloud inaccessible. Utilisez admin@adivision.ai / admin123 pour configurer la plateforme.");
+        setError("Base Cloud inaccessible. Utilisez admin@adpulse.ai / admin123 pour configurer la plateforme.");
         return;
       }
 
@@ -64,7 +65,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, users = [] }) => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
             </svg>
           </div>
-          <h1 className="text-4xl font-black text-slate-900 tracking-tighter italic uppercase">ADiVISION AI</h1>
+          <h1 className="text-4xl font-black text-slate-900 tracking-tighter italic uppercase">AdPulse AI</h1>
           <p className="text-slate-400 mt-2 text-xs font-bold uppercase tracking-widest italic">SaaS Performance Engine</p>
         </div>
 
