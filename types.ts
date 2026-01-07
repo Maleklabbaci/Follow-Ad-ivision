@@ -49,6 +49,8 @@ export interface CampaignStats {
   status: 'ACTIVE' | 'PAUSED' | 'ARCHIVED';
   lastSync?: string;
   dataSource: 'MOCK' | 'REAL_API';
+  isValidated?: boolean;
+  auditLogs?: string[];
 }
 
 export interface IntegrationSecret {

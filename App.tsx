@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { User, UserRole, Client, CampaignStats, IntegrationSecret } from './types';
@@ -21,8 +22,8 @@ const App: React.FC = () => {
     const parsed = saved ? JSON.parse(saved) : [];
     if (parsed.length === 0) {
       return [
-        { id: 'c1', name: 'Elite Fitness Pro', email: 'contact@fitness.com', createdAt: '2024-01-01', adAccounts: ['act_123'], campaignIds: ['cp_1', 'cp_2'] },
-        { id: 'c2', name: 'Bloom Boutique', email: 'client@bloom.com', createdAt: '2024-02-15', adAccounts: ['act_456'], campaignIds: ['cp_3', 'cp_4'] }
+        { id: 'c1', name: 'Elite Fitness Pro', email: 'contact@fitness.com', createdAt: '2024-01-01', adAccounts: ['act_12345678'], campaignIds: ['cp_1', 'cp_2'] },
+        { id: 'c2', name: 'Bloom Boutique', email: 'client@bloom.com', createdAt: '2024-02-15', adAccounts: ['act_87654321'], campaignIds: ['cp_3', 'cp_4'] }
       ];
     }
     return parsed;
@@ -38,88 +39,83 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : [];
   });
 
-  // Moteur de calcul marketing certifié (ROAS, CTR, CPC)
   const calculateDerivedStats = useCallback((cp: Partial<CampaignStats>): CampaignStats => {
     const spend = cp.spend || 0;
     const clicks = cp.clicks || 0;
     const conv = cp.conversions || 0;
     const imps = cp.impressions || 0;
-    const AOV = 145.00; // Panier moyen simulé pour le calcul du revenu
+    const AOV = 145.00; 
 
     return {
       ...(cp as CampaignStats),
       ctr: imps > 0 ? clicks / imps : 0,
       cpc: clicks > 0 ? spend / clicks : 0,
       roas: spend > 0 ? (conv * AOV) / spend : 0,
-      lastSync: new Date().toISOString()
+      lastSync: cp.lastSync || new Date().toISOString(),
+      isValidated: cp.isValidated ?? false
     };
   }, []);
 
-  // AUTO-PROVISIONING : Détecte toute campagne "assignée" mais pas encore "dans la plateforme"
+  // AUTO-PROVISIONING: Link campaigns to clients automatically
   useEffect(() => {
-    // 1. On récupère TOUS les IDs que les admins ont assigné aux clients
     const assignedCampaignIds = new Set(clients.flatMap(c => c.campaignIds));
-    
-    // 2. On récupère les IDs déjà présents dans notre base de stats
     const existingCampaignIds = new Set(campaigns.map(c => c.campaignId));
-    
-    // 3. On identifie les manquants
     const missingIds = Array.from(assignedCampaignIds).filter(id => !existingCampaignIds.has(id));
     
     if (missingIds.length > 0) {
-      console.log(`[Auto-Provisioning] Initialisation de ${missingIds.length} nouvelles campagnes...`);
-      
       const newEntries: CampaignStats[] = missingIds.map(id => {
-        // On cherche si le nom est disponible dans un "pool" ou on en génère un
-        const client = clients.find(c => c.campaignIds.includes(id));
+        const owner = clients.find(c => c.campaignIds.includes(id));
         return calculateDerivedStats({
-          id: `local_${Math.random().toString(36).substr(2, 9)}`,
+          id: `local_${Math.random().toString(36).substring(2, 9)}`,
           campaignId: id,
-          name: `Campagne ${id} - ${client?.name || 'Inconnu'}`,
+          name: `Campaign ${id} (${owner?.name || 'New'})`,
           date: new Date().toISOString(),
-          spend: 50 + Math.random() * 100, // Budget initial
-          impressions: 5000 + Math.floor(Math.random() * 5000),
-          clicks: 150 + Math.floor(Math.random() * 200),
-          conversions: 5 + Math.floor(Math.random() * 10),
+          spend: 100 + Math.random() * 200,
+          impressions: 10000 + Math.floor(Math.random() * 5000),
+          clicks: 200 + Math.floor(Math.random() * 300),
+          conversions: 10 + Math.floor(Math.random() * 20),
           status: 'ACTIVE',
-          dataSource: 'MOCK'
+          dataSource: 'MOCK',
+          isValidated: false,
+          auditLogs: [`Auto-provisioned for client: ${owner?.name || 'Unknown'}`]
         });
       });
       
       setCampaigns(prev => [...prev, ...newEntries]);
     }
-  }, [clients, campaigns, calculateDerivedStats]);
+  }, [clients, campaigns.length, calculateDerivedStats]);
 
-  // LIVE PULSE ENGINE : Fait vivre uniquement les campagnes assignées
+  // LIVE PULSE: Only for non-validated mock data
   useEffect(() => {
     const pulseInterval = setInterval(() => {
-      setCampaigns(prev => prev.map(cp => {
-        // Est-ce que cette campagne appartient toujours à quelqu'un ?
-        const isCurrentlyAssigned = clients.some(c => c.campaignIds.includes(cp.campaignId));
-        
-        if (!isCurrentlyAssigned || cp.status !== 'ACTIVE') return cp;
-        
-        // Simulation de trafic incrémental réaliste
-        const growthFactor = Math.random();
-        const newImps = cp.impressions + Math.floor(growthFactor * 300);
-        const newClicks = cp.clicks + (growthFactor > 0.8 ? Math.floor(Math.random() * 8) : 0);
-        const newConv = cp.conversions + (growthFactor > 0.96 ? 1 : 0);
-        const addedSpend = (newClicks - cp.clicks) * (cp.cpc || 1.25) + (Math.random() * 0.5);
+      setCampaigns(prev => {
+        let hasChanges = false;
+        const updated = prev.map(cp => {
+          const isAssigned = clients.some(c => c.campaignIds.includes(cp.campaignId));
+          if (!isAssigned || cp.status !== 'ACTIVE' || cp.dataSource === 'REAL_API' || cp.isValidated) return cp;
+          
+          hasChanges = true;
+          const tick = Math.random();
+          const addImps = Math.floor(tick * 150);
+          const addClicks = tick > 0.85 ? Math.floor(Math.random() * 5) : 0;
+          const addConv = tick > 0.98 ? 1 : 0;
+          const addedSpend = (addClicks * (cp.cpc || 1.1)) + (Math.random() * 0.2);
 
-        return calculateDerivedStats({
-          ...cp,
-          impressions: newImps,
-          clicks: newClicks,
-          conversions: newConv,
-          spend: cp.spend + addedSpend
+          return calculateDerivedStats({
+            ...cp,
+            impressions: cp.impressions + addImps,
+            clicks: cp.clicks + addClicks,
+            conversions: cp.conversions + addConv,
+            spend: cp.spend + addedSpend
+          });
         });
-      }));
+        return hasChanges ? updated : prev;
+      });
     }, 5000);
 
     return () => clearInterval(pulseInterval);
   }, [clients, calculateDerivedStats]);
 
-  // Persistance Locale
   useEffect(() => { localStorage.setItem('app_clients', JSON.stringify(clients)); }, [clients]);
   useEffect(() => { localStorage.setItem('app_secrets', JSON.stringify(secrets)); }, [secrets]);
   useEffect(() => { localStorage.setItem('app_campaigns', JSON.stringify(campaigns)); }, [campaigns]);
