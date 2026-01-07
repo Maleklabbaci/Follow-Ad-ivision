@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { User, UserRole, Client, CampaignStats, IntegrationSecret } from './types';
 import Layout from './components/Layout';
@@ -29,36 +29,42 @@ const App: React.FC = () => {
           { id: 'c2', name: 'Bloom Boutique', email: 'client@bloom.com', createdAt: '2024-02-15', adAccounts: ['act_87654321'], campaignIds: ['cp_3', 'cp_4'] }
         ];
       }
-      return parsed.map(c => ({ ...c, campaignIds: c.campaignIds || [], adAccounts: c.adAccounts || [] }));
+      return parsed.map(c => ({ 
+        ...c, 
+        campaignIds: Array.isArray(c.campaignIds) ? c.campaignIds : [], 
+        adAccounts: Array.isArray(c.adAccounts) ? c.adAccounts : [] 
+      }));
     } catch { return []; }
   });
 
   const [secrets, setSecrets] = useState<IntegrationSecret[]>(() => {
     try {
       const saved = localStorage.getItem('app_secrets');
-      return Array.isArray(JSON.parse(saved || '[]')) ? JSON.parse(saved || '[]') : [];
+      const parsed = JSON.parse(saved || '[]');
+      return Array.isArray(parsed) ? parsed : [];
     } catch { return []; }
   });
 
   const [campaigns, setCampaigns] = useState<CampaignStats[]>(() => {
     try {
       const saved = localStorage.getItem('app_campaigns');
-      return Array.isArray(JSON.parse(saved || '[]')) ? JSON.parse(saved || '[]') : [];
+      const parsed = JSON.parse(saved || '[]');
+      return Array.isArray(parsed) ? parsed : [];
     } catch { return []; }
   });
 
-  const calculateDerivedStats = useCallback((cp: Partial<CampaignStats>): CampaignStats => {
-    const spend = Number(cp.spend) || 0;
-    const clicks = Number(cp.clicks) || 0;
-    const conv = Number(cp.conversions) || 0;
-    const imps = Number(cp.impressions) || 0;
+  const sanitizeCampaign = useCallback((cp: Partial<CampaignStats>): CampaignStats => {
+    const spend = Math.max(0, Number(cp.spend) || 0);
+    const clicks = Math.max(0, Math.floor(Number(cp.clicks) || 0));
+    const conv = Math.max(0, Math.floor(Number(cp.conversions) || 0));
+    const imps = Math.max(0, Math.floor(Number(cp.impressions) || 0));
     const AOV = 145.00; 
 
     return {
-      ...(cp as CampaignStats),
-      id: cp.id || `local_${Math.random().toString(36).substring(2, 9)}`,
+      id: cp.id || `cp_${Math.random().toString(36).substring(2, 9)}`,
       campaignId: cp.campaignId || 'unassigned',
-      name: cp.name || 'Unnamed Campaign',
+      name: cp.name || 'Untitled Campaign',
+      date: cp.date || new Date().toISOString(),
       spend,
       clicks,
       conversions: conv,
@@ -69,58 +75,47 @@ const App: React.FC = () => {
       lastSync: cp.lastSync || new Date().toISOString(),
       isValidated: !!cp.isValidated,
       status: cp.status || 'ACTIVE',
-      dataSource: cp.dataSource || 'MOCK'
+      dataSource: cp.dataSource || 'MOCK',
+      auditLogs: Array.isArray(cp.auditLogs) ? cp.auditLogs : []
     };
   }, []);
 
-  // AUTO-PROVISIONING
+  // Ensure all campaigns are sanitized on load and when state changes
   useEffect(() => {
-    const assignedCampaignIds = new Set(clients.flatMap(c => c.campaignIds || []));
-    const existingCampaignIds = new Set(campaigns.map(c => c.campaignId));
-    const missingIds = Array.from(assignedCampaignIds).filter(id => !existingCampaignIds.has(id));
+    const isDirty = campaigns.some(c => !c.id || typeof c.spend !== 'number');
+    if (isDirty) {
+      setCampaigns(prev => prev.map(sanitizeCampaign));
+    }
+  }, [campaigns, sanitizeCampaign]);
+
+  // AUTO-PROVISIONING logic - stabilized to prevent infinite loops
+  useEffect(() => {
+    if (clients.length === 0) return;
+    
+    const assignedIds = new Set(clients.flatMap(c => c.campaignIds || []));
+    const existingIds = new Set(campaigns.map(c => c.campaignId));
+    const missingIds = Array.from(assignedIds).filter(id => !existingIds.has(id));
     
     if (missingIds.length > 0) {
-      const newEntries: CampaignStats[] = missingIds.map(id => {
-        const owner = clients.find(c => c.campaignIds?.includes(id));
-        return calculateDerivedStats({
-          campaignId: id,
-          name: `Campaign ${id} (${owner?.name || 'New'})`,
-          date: new Date().toISOString(),
-          spend: 100 + Math.random() * 200,
-          impressions: 10000 + Math.floor(Math.random() * 5000),
-          clicks: 200 + Math.floor(Math.random() * 300),
-          conversions: 10 + Math.floor(Math.random() * 20),
-          status: 'ACTIVE',
-          dataSource: 'MOCK',
-          isValidated: false,
-          auditLogs: [`Auto-provisioned for client: ${owner?.name || 'Unknown'}`]
-        });
-      });
-      setCampaigns(prev => [...prev, ...newEntries]);
-    }
-  }, [clients, calculateDerivedStats]);
-
-  // Pulse Effect
-  useEffect(() => {
-    const interval = setInterval(() => {
       setCampaigns(prev => {
-        let changed = false;
-        const next = prev.map(cp => {
-          if (cp.status !== 'ACTIVE' || cp.dataSource === 'REAL_API' || cp.isValidated) return cp;
-          changed = true;
-          return calculateDerivedStats({
-            ...cp,
-            impressions: cp.impressions + Math.floor(Math.random() * 10),
-            clicks: cp.clicks + (Math.random() > 0.9 ? 1 : 0),
-            spend: cp.spend + (Math.random() * 0.5)
+        const newEntries = missingIds.map(id => {
+          const owner = clients.find(c => c.campaignIds?.includes(id));
+          return sanitizeCampaign({
+            campaignId: id,
+            name: `Campaign ${id} (${owner?.name || 'New'})`,
+            spend: 150 + Math.random() * 300,
+            impressions: 12000 + Math.floor(Math.random() * 8000),
+            clicks: 250 + Math.floor(Math.random() * 400),
+            conversions: 12 + Math.floor(Math.random() * 25),
+            auditLogs: [`Auto-provisioned for client: ${owner?.name || 'System'}`]
           });
         });
-        return changed ? next : prev;
+        return [...prev, ...newEntries];
       });
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [calculateDerivedStats]);
+    }
+  }, [clients, campaigns.length, sanitizeCampaign]);
 
+  // Persistance
   useEffect(() => { localStorage.setItem('app_clients', JSON.stringify(clients)); }, [clients]);
   useEffect(() => { localStorage.setItem('app_secrets', JSON.stringify(secrets)); }, [secrets]);
   useEffect(() => { localStorage.setItem('app_campaigns', JSON.stringify(campaigns)); }, [campaigns]);
