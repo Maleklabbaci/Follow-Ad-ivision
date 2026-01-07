@@ -10,23 +10,23 @@ export const getCampaignInsights = async (campaigns: CampaignStats[]): Promise<s
   ).join('\n');
 
   const prompt = `
-    Analyze the following REAL Facebook Ads performance data:
+    Analyze the following REAL Facebook Ads performance data and provide a strategic audit:
     ${campaignDataSummary}
 
-    Tasks:
-    1. Validate the efficiency of each campaign based on its data source.
-    2. Suggest budget reallocation from low ROAS to high ROAS campaigns.
-    3. Identify potential data discrepancies if stats look unnatural.
+    Your analysis should include:
+    1. Performance Winners: Which campaigns are over-performing?
+    2. Budget Leaks: Where is money being wasted (low ROAS, high CPC)?
+    3. Actionable Recommendations: Precise instructions on what to change.
     
-    Return the response in clear Markdown.
+    Format the response in professional Markdown with sections.
   `;
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview',
+      model: 'gemini-3-flash-preview',
       contents: prompt,
       config: {
-        systemInstruction: "You are a professional Meta Ads auditor. Focus on data accuracy and ROI optimization."
+        systemInstruction: "You are a senior Meta Ads performance architect and data auditor. Your mission is to maximize client ROI and detect data integrity issues. Be concise, expert, and direct."
       }
     });
 

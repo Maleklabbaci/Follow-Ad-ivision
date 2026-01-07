@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { User, UserRole, Client, CampaignStats, IntegrationSecret, AuditLog, AiReport } from './types';
 import { DB } from './services/db';
@@ -27,24 +27,25 @@ const App: React.FC = () => {
   const [aiReports, setAiReports] = useState<AiReport[]>([]);
 
   useEffect(() => {
-    const initCloud = async () => {
+    const initApp = async () => {
       try {
         const data = await DB.fetchAll();
         if (data) {
-          setClients(data.clients);
-          setCampaigns(data.campaigns);
-          setSecrets(data.secrets);
-          setUsers(data.users);
-          setAuditLogs(data.auditLogs);
-          setAiReports(data.aiReports);
+          setClients(data.clients || []);
+          setCampaigns(data.campaigns || []);
+          setSecrets(data.secrets || []);
+          setUsers(data.users || []);
+          setAuditLogs(data.auditLogs || []);
+          setAiReports(data.aiReports || []);
         }
       } catch (err) {
-        console.error("Initialization failed:", err);
+        console.warn("Soft initialization error, using local defaults if available.");
       } finally {
-        setIsInitializing(false);
+        // We delay slightly for UX feel
+        setTimeout(() => setIsInitializing(false), 500);
       }
     };
-    initCloud();
+    initApp();
   }, []);
 
   const handleLogin = (u: User) => {
@@ -57,7 +58,7 @@ const App: React.FC = () => {
       userName: u.name,
       action: 'USER_LOGIN',
       resource: 'AUTH',
-      ipAddress: '192.168.1.1'
+      ipAddress: 'local'
     });
   };
 
@@ -71,8 +72,8 @@ const App: React.FC = () => {
       <div className="h-screen flex items-center justify-center bg-slate-900 text-white flex-col gap-4">
         <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
         <div className="text-center">
-          <p className="font-black text-xl tracking-tighter uppercase italic">AdPulse Cloud Engine</p>
-          <p className="text-[10px] text-slate-400 uppercase tracking-widest mt-2">Connecting to Supabase...</p>
+          <p className="font-black text-xl tracking-tighter uppercase italic">AdPulse Engine</p>
+          <p className="text-[10px] text-slate-400 uppercase tracking-widest mt-2 animate-pulse">Syncing Data...</p>
         </div>
       </div>
     );

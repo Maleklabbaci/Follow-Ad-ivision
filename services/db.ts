@@ -1,8 +1,10 @@
 
-import { Client, CampaignStats, IntegrationSecret, User, AuditLog, AiReport, CreativePerformance, MarketBenchmark, PredictiveForecast } from '../types';
+import { Client, CampaignStats, IntegrationSecret, User, AuditLog, AiReport } from '../types';
 import { supabase } from './supabase';
 
 class DatabaseEngine {
+  private LOCAL_STORAGE_KEY = 'adpulse_local_db';
+
   formatCurrency(amount: number, currency: string = 'USD'): string {
     return new Intl.NumberFormat(currency === 'EUR' ? 'fr-FR' : 'en-US', {
       style: 'currency',
@@ -11,8 +13,28 @@ class DatabaseEngine {
     }).format(amount);
   }
 
+  private getLocalData() {
+    const saved = localStorage.getItem(this.LOCAL_STORAGE_KEY);
+    return saved ? JSON.parse(saved) : null;
+  }
+
+  private saveLocalData(data: any) {
+    localStorage.setItem(this.LOCAL_STORAGE_KEY, JSON.stringify(data));
+  }
+
   async fetchAll() {
     console.log("--- Syncing from Cloud (Supabase) ---");
+    
+    // Initial data structure
+    let data = {
+      clients: [] as Client[],
+      campaigns: [] as CampaignStats[],
+      secrets: [] as IntegrationSecret[],
+      users: [] as User[],
+      auditLogs: [] as AuditLog[],
+      aiReports: [] as AiReport[]
+    };
+
     try {
       const [clientsRes, campaignsRes, secretsRes, usersRes, logsRes] = await Promise.all([
         supabase.from('clients').select('*'),
@@ -24,7 +46,7 @@ class DatabaseEngine {
 
       if (clientsRes.error) throw clientsRes.error;
 
-      return {
+      data = {
         clients: clientsRes.data || [],
         campaigns: campaignsRes.data || [],
         secrets: secretsRes.data || [],
@@ -33,54 +55,67 @@ class DatabaseEngine {
           password: u.password_hash || u.password
         })),
         auditLogs: logsRes.data || [],
-        aiReports: [],
-        creativePerformance: [],
-        marketBenchmarks: [],
-        predictiveForecasts: []
+        aiReports: []
       };
+
+      // Update cache on successful fetch
+      this.saveLocalData(data);
+      console.log("--- Cloud Sync Success ---");
+      return data;
     } catch (error: any) {
-      console.error("Supabase Connection Error:", error.message);
-      return null;
+      console.error("Supabase Connection Error (Falling back to local):", error.message);
+      
+      // Fallback to local storage if network fails
+      const cached = this.getLocalData();
+      if (cached) {
+        console.log("--- Using Cached Local Data ---");
+        return cached;
+      }
+      
+      // If no cache, return empty but valid structure
+      return data;
     }
   }
 
   async addAuditLog(log: AuditLog) {
-    await supabase.from('audit_logs').upsert(log, { onConflict: 'id' });
+    try {
+      await supabase.from('audit_logs').upsert(log, { onConflict: 'id' });
+    } catch (e) {
+      console.warn("Audit log not synced to cloud");
+    }
   }
 
   async saveSecrets(secrets: IntegrationSecret[]) {
-    const { error } = await supabase.from('secrets').upsert(secrets, { onConflict: 'type' });
-    if (error) throw error;
+    try {
+      const { error } = await supabase.from('secrets').upsert(secrets, { onConflict: 'type' });
+      if (error) throw error;
+    } finally {
+      const current = this.getLocalData() || {};
+      this.saveLocalData({ ...current, secrets });
+    }
   }
 
   async saveClients(clients: Client[]) {
-    const { error } = await supabase.from('clients').upsert(clients, { onConflict: 'id' });
-    if (error) {
-      console.error("Client Save Failed:", error.message);
-      throw error;
+    try {
+      const { error } = await supabase.from('clients').upsert(clients, { onConflict: 'id' });
+      if (error) throw error;
+    } finally {
+      const current = this.getLocalData() || {};
+      this.saveLocalData({ ...current, clients });
     }
   }
 
   async deleteClient(clientId: string) {
-    console.log(`--- Deleting Client ${clientId} from Cloud ---`);
-    
-    // 1. Supprimer l'utilisateur lié à ce client
-    const { error: userError } = await supabase
-      .from('users')
-      .delete()
-      .eq('clientId', clientId);
-    
-    if (userError) console.warn("Note: No associated user found or error deleting user.");
-
-    // 2. Supprimer le client
-    const { error: clientError } = await supabase
-      .from('clients')
-      .delete()
-      .eq('id', clientId);
-
-    if (clientError) {
-      console.error("Cloud Deletion Failed:", clientError.message);
-      throw clientError;
+    try {
+      await supabase.from('users').delete().eq('clientId', clientId);
+      await supabase.from('clients').delete().eq('id', clientId);
+    } finally {
+      const current = this.getLocalData();
+      if (current) {
+        const updatedClients = (current.clients || []).filter((c: any) => c.id !== clientId);
+        const updatedUsers = (current.users || []).filter((u: any) => u.clientId !== clientId);
+        this.saveLocalData({ ...current, clients: updatedClients, users: updatedUsers });
+      }
     }
   }
 
@@ -93,18 +128,22 @@ class DatabaseEngine {
       clientId: u.clientId || null,
       password_hash: u.password || u.password_hash
     }));
-    const { error } = await supabase.from('users').upsert(dbUsers, { onConflict: 'id' });
-    if (error) {
-      console.error("User Save Failed:", error.message);
-      throw error;
+    try {
+      const { error } = await supabase.from('users').upsert(dbUsers, { onConflict: 'id' });
+      if (error) throw error;
+    } finally {
+      const current = this.getLocalData() || {};
+      this.saveLocalData({ ...current, users });
     }
   }
 
   async saveCampaigns(campaigns: CampaignStats[]) {
-    const { error } = await supabase.from('campaigns').upsert(campaigns, { onConflict: 'id' });
-    if (error) {
-      console.error("Campaign Save Failed:", error.message);
-      throw error;
+    try {
+      const { error } = await supabase.from('campaigns').upsert(campaigns, { onConflict: 'id' });
+      if (error) throw error;
+    } finally {
+      const current = this.getLocalData() || {};
+      this.saveLocalData({ ...current, campaigns });
     }
   }
 }
