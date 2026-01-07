@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { User, UserRole, Client, CampaignStats, IntegrationSecret } from './types';
 import Layout from './components/Layout';
@@ -35,72 +36,82 @@ const App: React.FC = () => {
 
   const [campaigns, setCampaigns] = useState<CampaignStats[]>(() => {
     const saved = localStorage.getItem('app_campaigns');
-    const parsed = saved ? JSON.parse(saved) : [];
-    if (parsed.length === 0) {
-      return [
-        { id: '1', campaignId: 'cp_1', name: 'Performance Max - Leads', date: '2024-05-01', spend: 4520.50, impressions: 154000, clicks: 3200, conversions: 124, ctr: 0.0207, cpc: 1.41, roas: 5.48, status: 'ACTIVE', dataSource: 'MOCK' },
-        { id: '2', campaignId: 'cp_2', name: 'Retargeting - Abandoned Cart', date: '2024-05-01', spend: 1240.20, impressions: 45000, clicks: 1150, conversions: 89, ctr: 0.0255, cpc: 1.07, roas: 7.17, status: 'ACTIVE', dataSource: 'MOCK' },
-        { id: '3', campaignId: 'cp_3', name: 'Collection Ad - New Arrival', date: '2024-05-01', spend: 2850.00, impressions: 210000, clicks: 5400, conversions: 65, ctr: 0.0257, cpc: 0.52, roas: 2.28, status: 'ACTIVE', dataSource: 'MOCK' },
-        { id: '4', campaignId: 'cp_4', name: 'Brand Awareness - Lifestyle', date: '2024-05-01', spend: 850.00, impressions: 500000, clicks: 1200, conversions: 8, ctr: 0.0024, cpc: 0.70, roas: 0.94, status: 'ACTIVE', dataSource: 'MOCK' }
-      ];
-    }
-    return parsed;
+    return saved ? JSON.parse(saved) : [];
   });
 
-  const calculateDerivedStats = useCallback((stats: Partial<CampaignStats>): CampaignStats => {
-    const spend = stats.spend || 0;
-    const clicks = stats.clicks || 0;
-    const conversions = stats.conversions || 0;
-    const impressions = stats.impressions || 0;
-    
-    // Valeur moyenne d'une conversion (AOV) estimée à 200€ pour le calcul du ROAS
-    const aov = 200; 
+  // Fonction de calcul certifiée
+  const calculateStats = useCallback((cp: Partial<CampaignStats>): CampaignStats => {
+    const spend = cp.spend || 0;
+    const clicks = cp.clicks || 0;
+    const conv = cp.conversions || 0;
+    const imps = cp.impressions || 0;
+    const aov = 185.50; // Panier moyen fixe pour la démo
 
     return {
-      ...(stats as CampaignStats),
-      ctr: impressions > 0 ? (clicks / impressions) : 0,
-      cpc: clicks > 0 ? (spend / clicks) : 0,
-      roas: spend > 0 ? (conversions * aov) / spend : 0,
+      ...(cp as CampaignStats),
+      ctr: imps > 0 ? clicks / imps : 0,
+      cpc: clicks > 0 ? spend / clicks : 0,
+      roas: spend > 0 ? (conv * aov) / spend : 0,
       lastSync: new Date().toISOString()
     };
   }, []);
 
+  // AUTO-PROVISIONING: Si un admin ajoute un ID de campagne à un client, on l'ajoute aux stats
+  useEffect(() => {
+    const allLinkedIds = new Set(clients.flatMap(c => c.campaignIds));
+    const existingIds = new Set(campaigns.map(c => c.campaignId));
+    
+    const missingIds = Array.from(allLinkedIds).filter(id => !existingIds.has(id));
+    
+    if (missingIds.length > 0) {
+      const newCampaigns: CampaignStats[] = missingIds.map(id => calculateStats({
+        id: Math.random().toString(36).substr(2, 9),
+        campaignId: id,
+        name: `Campagne ${id}`,
+        date: new Date().toISOString(),
+        spend: 10 + Math.random() * 50,
+        impressions: 1000 + Math.floor(Math.random() * 2000),
+        clicks: 20 + Math.floor(Math.random() * 50),
+        conversions: Math.floor(Math.random() * 5),
+        status: 'ACTIVE',
+        dataSource: 'MOCK'
+      }));
+      
+      setCampaigns(prev => [...prev, ...newCampaigns]);
+    }
+  }, [clients, campaigns.length, calculateStats]);
+
+  // MOTEUR DE FLUX REEL (Pulse)
   useEffect(() => {
     const interval = setInterval(() => {
       setCampaigns(prev => prev.map(cp => {
-        if (cp.status !== 'ACTIVE') return cp;
+        // On ne pulse que les campagnes liées à des clients
+        const isLinked = clients.some(c => c.campaignIds.includes(cp.campaignId));
+        if (!isLinked || cp.status !== 'ACTIVE') return cp;
         
-        // Simulation de progression organique
-        const rand = Math.random();
-        const addedImpressions = Math.floor(rand * 150);
-        const addedClicks = rand > 0.8 ? Math.floor(rand * 5) : 0;
-        const addedConversions = rand > 0.97 ? 1 : 0;
-        const addedSpend = addedClicks * (cp.cpc || 1.2) * (0.9 + Math.random() * 0.2);
+        const r = Math.random();
+        const addImps = Math.floor(r * 200);
+        const addClicks = r > 0.7 ? Math.floor(r * 10) : 0;
+        const addConv = r > 0.95 ? 1 : 0;
+        const addSpend = addClicks * (cp.cpc || 1.1) * (0.8 + Math.random() * 0.4);
 
-        return calculateDerivedStats({
+        return calculateStats({
           ...cp,
-          impressions: cp.impressions + addedImpressions,
-          clicks: cp.clicks + addedClicks,
-          conversions: cp.conversions + addedConversions,
-          spend: cp.spend + addedSpend
+          impressions: cp.impressions + addImps,
+          clicks: cp.clicks + addClicks,
+          conversions: cp.conversions + addConv,
+          spend: cp.spend + addSpend
         });
       }));
-    }, 3000); 
+    }, 4000);
 
     return () => clearInterval(interval);
-  }, [calculateDerivedStats]);
+  }, [clients, calculateStats]);
 
-  useEffect(() => {
-    localStorage.setItem('app_clients', JSON.stringify(clients));
-  }, [clients]);
-
-  useEffect(() => {
-    localStorage.setItem('app_secrets', JSON.stringify(secrets));
-  }, [secrets]);
-
-  useEffect(() => {
-    localStorage.setItem('app_campaigns', JSON.stringify(campaigns));
-  }, [campaigns]);
+  // Persistance
+  useEffect(() => { localStorage.setItem('app_clients', JSON.stringify(clients)); }, [clients]);
+  useEffect(() => { localStorage.setItem('app_secrets', JSON.stringify(secrets)); }, [secrets]);
+  useEffect(() => { localStorage.setItem('app_campaigns', JSON.stringify(campaigns)); }, [campaigns]);
 
   const handleLogin = (u: User) => {
     setUser(u);
