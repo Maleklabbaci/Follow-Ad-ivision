@@ -51,7 +51,6 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({ clients, setClients, ca
 
   const handleLinkClient = (campaignId: string, targetClientId: string) => {
     setClients(prev => prev.map(client => {
-      // 1. Remove the campaignId from current owner (if any)
       const isCurrentOwner = client.campaignIds.includes(campaignId);
       const isTarget = client.id === targetClientId;
 
@@ -68,25 +67,23 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({ clients, setClients, ca
     setLinkingCampaignId(null);
   };
 
-  // SUPPRESSION INDIVIDUELLE
   const handleDelete = (id: string, name: string) => {
     if (window.confirm(`Confirmer la suppression de la campagne : ${name} ?`)) {
+      const campaignToDelete = campaigns.find(c => c.id === id);
       setCampaigns(prev => prev.filter(c => c.id !== id));
-      // Also clean up from clients
-      const campaign = campaigns.find(c => c.id === id);
-      if (campaign) {
+      
+      if (campaignToDelete) {
         setClients(prev => prev.map(c => ({
           ...c,
-          campaignIds: c.campaignIds.filter(cid => cid !== campaign.campaignId)
+          campaignIds: c.campaignIds.filter(cid => cid !== campaignToDelete.campaignId)
         })));
       }
     }
   };
 
-  // ACTUALISATION INDIVIDUELLE
   const refreshSingleCampaign = async (campaign: CampaignStats) => {
     if (campaign.dataSource !== 'REAL_API') {
-      alert("Seules les campagnes certifiées API peuvent être actualisées individuellement.");
+      alert("Seules les campagnes certifiées API peuvent être actualisées.");
       return;
     }
 
@@ -117,50 +114,46 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({ clients, setClients, ca
             roas: insights.spend > 0 ? (insights.conversions * 145) / insights.spend : 0,
             lastSync: new Date().toISOString(),
             isValidated: true,
-            auditLogs: [...(cp.auditLogs || []), `Actualisation individuelle réussie le ${new Date().toLocaleString()}`]
+            auditLogs: [...(cp.auditLogs || []), `Actualisation réussie le ${new Date().toLocaleString()}`]
           };
         }
         return cp;
       }));
     } catch (err: any) {
-      alert(`Erreur d'actualisation : ${err.message}`);
+      alert(`Erreur : ${err.message}`);
     } finally {
       setRefreshingId(null);
     }
   };
 
-  // NETTOYAGE DES DONNÉES SIMULÉES (MOCK)
   const purgeMockData = () => {
     const mockCount = campaigns.filter(c => c.dataSource === 'MOCK').length;
-    if (mockCount === 0) {
-      alert("Aucune donnée simulée à supprimer.");
-      return;
-    }
-    if (window.confirm(`Voulez-vous supprimer définitivement les ${mockCount} campagnes simulées pour ne garder que les données réelles ?`)) {
+    if (mockCount === 0) return;
+    if (window.confirm(`Supprimer les ${mockCount} campagnes simulées ?`)) {
       setCampaigns(prev => prev.filter(c => c.dataSource === 'REAL_API'));
-      alert("Nettoyage terminé.");
     }
   };
 
-  // EXTRACTION GLOBALE META
   const runGlobalExtraction = async () => {
     const fbSecret = secrets.find(s => s.type === 'FACEBOOK');
     if (!fbSecret || fbSecret.status !== 'VALID') {
-      alert("Erreur : Clé Meta API non configurée. Allez dans Paramètres.");
+      alert("Clé Meta API non configurée.");
       return;
     }
 
     setIsSyncing(true);
     setProgress(0);
-    setSyncLogs(['Début de l\'extraction Meta...']);
+    setSyncLogs(['Initialisation de l\'extraction...']);
 
     try {
       const token = await decryptSecret(fbSecret.value);
       let updatedCampaigns = [...campaigns];
+      let updatedClients = [...clients];
       
       for (let i = 0; i < clients.length; i++) {
         const client = clients[i];
-        log(`Scan du client : ${client.name}...`);
+        let clientCampaignIds = [...client.campaignIds];
+        log(`Scan: ${client.name}...`);
         
         for (const adAccountId of client.adAccounts) {
           try {
@@ -172,6 +165,11 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({ clients, setClients, ca
                 const insights = metaCp.insights?.data?.[0] || { spend: 0, impressions: 0, clicks: 0, conversions: 0 };
                 const existingIdx = updatedCampaigns.findIndex(c => c.campaignId === metaCp.id);
                 
+                // On s'assure que la campagne est liée au client si elle vient de son compte
+                if (!clientCampaignIds.includes(metaCp.id)) {
+                  clientCampaignIds.push(metaCp.id);
+                }
+
                 const validatedData: CampaignStats = {
                   id: existingIdx >= 0 ? updatedCampaigns[existingIdx].id : `ext_${Math.random().toString(36).substr(2, 9)}`,
                   campaignId: metaCp.id,
@@ -188,7 +186,7 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({ clients, setClients, ca
                   dataSource: 'REAL_API',
                   lastSync: new Date().toISOString(),
                   isValidated: true,
-                  auditLogs: [...(updatedCampaigns[existingIdx]?.auditLogs || []), `Synchronisé & Validé via API le ${new Date().toLocaleString()}`]
+                  auditLogs: [...(updatedCampaigns[existingIdx]?.auditLogs || []), `Synchronisé via API le ${new Date().toLocaleString()}`]
                 };
 
                 if (existingIdx >= 0) updatedCampaigns[existingIdx] = validatedData;
@@ -196,16 +194,23 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({ clients, setClients, ca
               });
             }
           } catch (e) {
-            log(`Échec extraction pour ${adAccountId}`);
+            log(`Erreur sur compte ${adAccountId}`);
           }
         }
+        
+        // Mise à jour du client avec ses nouvelles campagnes extraites
+        updatedClients = updatedClients.map(c => 
+          c.id === client.id ? { ...c, campaignIds: clientCampaignIds } : c
+        );
+        
         setProgress(Math.round(((i + 1) / clients.length) * 100));
       }
 
       setCampaigns(updatedCampaigns);
-      log('Extraction terminée.');
+      setClients(updatedClients);
+      log('Extraction et liaison terminées.');
     } catch (err) {
-      log('Erreur fatale lors de l\'extraction.');
+      log('Erreur fatale.');
     } finally {
       setIsSyncing(false);
     }
@@ -216,7 +221,7 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({ clients, setClients, ca
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
         <div>
           <h2 className="text-3xl font-black text-slate-900 tracking-tight">Data Certification Hub</h2>
-          <p className="text-slate-500 font-medium">Extraire, auditer et certifier l'origine de vos données marketing.</p>
+          <p className="text-slate-500 font-medium">Extraire, auditer et certifier vos données marketing.</p>
         </div>
         <div className="flex flex-wrap gap-3 w-full lg:w-auto">
           <button 
@@ -371,7 +376,7 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({ clients, setClients, ca
               {filteredCampaigns.length === 0 && (
                 <tr>
                   <td colSpan={8} className="px-8 py-20 text-center text-slate-400 italic font-medium">
-                    Aucune campagne trouvée. Importez des données via Meta ou vérifiez vos filtres.
+                    Aucune campagne trouvée.
                   </td>
                 </tr>
               )}
@@ -380,10 +385,10 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({ clients, setClients, ca
         </div>
       </div>
 
-      {(isSyncing || isAuditing) && (
+      {isSyncing && (
         <div className="fixed bottom-8 right-8 w-80 bg-slate-900 text-white rounded-3xl p-6 shadow-2xl border border-white/10 animate-in slide-in-from-bottom-10">
           <div className="flex justify-between items-center mb-4">
-            <span className="text-xs font-black uppercase tracking-widest text-blue-400">{isSyncing ? 'Extraction Meta' : 'Audit Interne'}</span>
+            <span className="text-xs font-black uppercase tracking-widest text-blue-400">Extraction Meta</span>
             <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
           </div>
           <div className="space-y-2 mb-6 h-20 overflow-hidden text-[10px] font-mono opacity-80">
