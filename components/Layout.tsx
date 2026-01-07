@@ -1,9 +1,11 @@
+
 import React, { useMemo, useState } from 'react';
 import { Outlet, useLocation, useParams, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { User, Client, UserRole, IntegrationSecret } from '../types';
 import { useCurrency } from '../contexts/CurrencyContext';
 import ADiVISIONChatbot from './AdPulseChatbot';
+import ShakeReporter from './ShakeReporter';
 
 interface LayoutProps {
   user: User;
@@ -135,6 +137,7 @@ const Layout: React.FC<LayoutProps> = ({ user, onLogout, clients, secrets = [] }
       </div>
 
       <ADiVISIONChatbot secrets={secrets} />
+      <ShakeReporter />
     </div>
   );
 };
