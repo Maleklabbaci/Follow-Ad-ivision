@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { User, UserRole, Client, CampaignStats, IntegrationSecret } from './types';
 import Layout from './components/Layout';
@@ -39,76 +38,88 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : [];
   });
 
-  // Fonction de calcul certifiée
-  const calculateStats = useCallback((cp: Partial<CampaignStats>): CampaignStats => {
+  // Moteur de calcul marketing certifié (ROAS, CTR, CPC)
+  const calculateDerivedStats = useCallback((cp: Partial<CampaignStats>): CampaignStats => {
     const spend = cp.spend || 0;
     const clicks = cp.clicks || 0;
     const conv = cp.conversions || 0;
     const imps = cp.impressions || 0;
-    const aov = 185.50; // Panier moyen fixe pour la démo
+    const AOV = 145.00; // Panier moyen simulé pour le calcul du revenu
 
     return {
       ...(cp as CampaignStats),
       ctr: imps > 0 ? clicks / imps : 0,
       cpc: clicks > 0 ? spend / clicks : 0,
-      roas: spend > 0 ? (conv * aov) / spend : 0,
+      roas: spend > 0 ? (conv * AOV) / spend : 0,
       lastSync: new Date().toISOString()
     };
   }, []);
 
-  // AUTO-PROVISIONING: Si un admin ajoute un ID de campagne à un client, on l'ajoute aux stats
+  // AUTO-PROVISIONING : Détecte toute campagne "assignée" mais pas encore "dans la plateforme"
   useEffect(() => {
-    const allLinkedIds = new Set(clients.flatMap(c => c.campaignIds));
-    const existingIds = new Set(campaigns.map(c => c.campaignId));
+    // 1. On récupère TOUS les IDs que les admins ont assigné aux clients
+    const assignedCampaignIds = new Set(clients.flatMap(c => c.campaignIds));
     
-    const missingIds = Array.from(allLinkedIds).filter(id => !existingIds.has(id));
+    // 2. On récupère les IDs déjà présents dans notre base de stats
+    const existingCampaignIds = new Set(campaigns.map(c => c.campaignId));
+    
+    // 3. On identifie les manquants
+    const missingIds = Array.from(assignedCampaignIds).filter(id => !existingCampaignIds.has(id));
     
     if (missingIds.length > 0) {
-      const newCampaigns: CampaignStats[] = missingIds.map(id => calculateStats({
-        id: Math.random().toString(36).substr(2, 9),
-        campaignId: id,
-        name: `Campagne ${id}`,
-        date: new Date().toISOString(),
-        spend: 10 + Math.random() * 50,
-        impressions: 1000 + Math.floor(Math.random() * 2000),
-        clicks: 20 + Math.floor(Math.random() * 50),
-        conversions: Math.floor(Math.random() * 5),
-        status: 'ACTIVE',
-        dataSource: 'MOCK'
-      }));
+      console.log(`[Auto-Provisioning] Initialisation de ${missingIds.length} nouvelles campagnes...`);
       
-      setCampaigns(prev => [...prev, ...newCampaigns]);
+      const newEntries: CampaignStats[] = missingIds.map(id => {
+        // On cherche si le nom est disponible dans un "pool" ou on en génère un
+        const client = clients.find(c => c.campaignIds.includes(id));
+        return calculateDerivedStats({
+          id: `local_${Math.random().toString(36).substr(2, 9)}`,
+          campaignId: id,
+          name: `Campagne ${id} - ${client?.name || 'Inconnu'}`,
+          date: new Date().toISOString(),
+          spend: 50 + Math.random() * 100, // Budget initial
+          impressions: 5000 + Math.floor(Math.random() * 5000),
+          clicks: 150 + Math.floor(Math.random() * 200),
+          conversions: 5 + Math.floor(Math.random() * 10),
+          status: 'ACTIVE',
+          dataSource: 'MOCK'
+        });
+      });
+      
+      setCampaigns(prev => [...prev, ...newEntries]);
     }
-  }, [clients, campaigns.length, calculateStats]);
+  }, [clients, campaigns, calculateDerivedStats]);
 
-  // MOTEUR DE FLUX REEL (Pulse)
+  // LIVE PULSE ENGINE : Fait vivre uniquement les campagnes assignées
   useEffect(() => {
-    const interval = setInterval(() => {
+    const pulseInterval = setInterval(() => {
       setCampaigns(prev => prev.map(cp => {
-        // On ne pulse que les campagnes liées à des clients
-        const isLinked = clients.some(c => c.campaignIds.includes(cp.campaignId));
-        if (!isLinked || cp.status !== 'ACTIVE') return cp;
+        // Est-ce que cette campagne appartient toujours à quelqu'un ?
+        const isCurrentlyAssigned = clients.some(c => c.campaignIds.includes(cp.campaignId));
         
-        const r = Math.random();
-        const addImps = Math.floor(r * 200);
-        const addClicks = r > 0.7 ? Math.floor(r * 10) : 0;
-        const addConv = r > 0.95 ? 1 : 0;
-        const addSpend = addClicks * (cp.cpc || 1.1) * (0.8 + Math.random() * 0.4);
+        if (!isCurrentlyAssigned || cp.status !== 'ACTIVE') return cp;
+        
+        // Simulation de trafic incrémental réaliste
+        const growthFactor = Math.random();
+        const newImps = cp.impressions + Math.floor(growthFactor * 300);
+        const newClicks = cp.clicks + (growthFactor > 0.8 ? Math.floor(Math.random() * 8) : 0);
+        const newConv = cp.conversions + (growthFactor > 0.96 ? 1 : 0);
+        const addedSpend = (newClicks - cp.clicks) * (cp.cpc || 1.25) + (Math.random() * 0.5);
 
-        return calculateStats({
+        return calculateDerivedStats({
           ...cp,
-          impressions: cp.impressions + addImps,
-          clicks: cp.clicks + addClicks,
-          conversions: cp.conversions + addConv,
-          spend: cp.spend + addSpend
+          impressions: newImps,
+          clicks: newClicks,
+          conversions: newConv,
+          spend: cp.spend + addedSpend
         });
       }));
-    }, 4000);
+    }, 5000);
 
-    return () => clearInterval(interval);
-  }, [clients, calculateStats]);
+    return () => clearInterval(pulseInterval);
+  }, [clients, calculateDerivedStats]);
 
-  // Persistance
+  // Persistance Locale
   useEffect(() => { localStorage.setItem('app_clients', JSON.stringify(clients)); }, [clients]);
   useEffect(() => { localStorage.setItem('app_secrets', JSON.stringify(secrets)); }, [secrets]);
   useEffect(() => { localStorage.setItem('app_campaigns', JSON.stringify(campaigns)); }, [campaigns]);
