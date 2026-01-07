@@ -1,8 +1,10 @@
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Client, CampaignStats } from '../types';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { getCampaignInsights } from '../services/geminiService';
+import { useCurrency } from '../contexts/CurrencyContext';
 
 interface AdminDashboardProps {
   clients: Client[];
@@ -13,28 +15,31 @@ const COLORS = ['#2563eb', '#10b981', '#f59e0b', '#6366f1', '#ec4899'];
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ clients, campaigns }) => {
   const navigate = useNavigate();
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [aiReport, setAiReport] = useState<string | null>(null);
+  const [selectedClientForAi, setSelectedClientForAi] = useState<string>('all');
+  const { format, convert } = useCurrency();
   
   const certifiedCampaigns = useMemo(() => {
     const allLinkedIds = new Set(clients.flatMap(c => c.campaignIds));
-    return campaigns.filter(cp => allLinkedIds.has(cp.campaignId));
-  }, [clients, campaigns]);
+    const filtered = campaigns.filter(cp => allLinkedIds.has(cp.campaignId));
+    
+    if (selectedClientForAi === 'all') return filtered;
+    
+    const client = clients.find(c => c.id === selectedClientForAi);
+    if (!client) return filtered;
+    
+    return filtered.filter(cp => client.campaignIds.includes(cp.campaignId));
+  }, [clients, campaigns, selectedClientForAi]);
 
   const totals = useMemo(() => {
     return certifiedCampaigns.reduce((acc, c) => ({
-      spend: acc.spend + c.spend,
-      conv: acc.conv + c.conversions,
-      roas: acc.roas + c.roas,
-      clicks: acc.clicks + c.clicks
-    }), { spend: 0, conv: 0, roas: 0, clicks: 0 });
-  }, [certifiedCampaigns]);
-
-  const sourceData = useMemo(() => {
-    const realCount = certifiedCampaigns.filter(c => c.dataSource === 'REAL_API').length;
-    const mockCount = certifiedCampaigns.filter(c => c.dataSource === 'MOCK').length;
-    return [
-      { name: 'API Meta', value: realCount, color: '#2563eb' },
-      { name: 'Simulé', value: mockCount, color: '#94a3b8' }
-    ];
+      spend: acc.spend + (c.spend || 0),
+      conv: acc.conv + (c.conversations_started || 0),
+      clicks: acc.clicks + (c.clicks || 0),
+      impressions: acc.impressions + (c.impressions || 0),
+      reach: acc.reach + (c.reach || 0),
+    }), { spend: 0, conv: 0, clicks: 0, impressions: 0, reach: 0 });
   }, [certifiedCampaigns]);
 
   const integrityScore = useMemo(() => {
@@ -43,24 +48,52 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ clients, campaigns }) =
     return Math.round((validated / certifiedCampaigns.length) * 100);
   }, [certifiedCampaigns]);
 
-  const avgRoas = certifiedCampaigns.length > 0 ? (totals.roas / certifiedCampaigns.length).toFixed(2) : '0.00';
-
+  const globalCtr = totals.impressions > 0 ? (totals.clicks / totals.impressions * 100).toFixed(2) : '0.00';
+  const globalCpm = totals.impressions > 0 ? (totals.spend / totals.impressions) * 1000 : 0;
+  const globalCpa = totals.conv > 0 ? (totals.spend / totals.conv) : 0;
+  
   const clientPerformances = useMemo(() => {
     return clients.map(client => {
       const related = campaigns.filter(cp => client.campaignIds.includes(cp.campaignId));
-      const spend = related.reduce((sum, cp) => sum + cp.spend, 0);
-      const conv = related.reduce((sum, cp) => sum + cp.conversions, 0);
-      const roas = related.length > 0 ? related.reduce((sum, cp) => sum + cp.roas, 0) / related.length : 0;
-      return { name: client.name, spend, conv, roas, id: client.id, count: related.length };
-    }).sort((a, b) => b.spend - a.spend);
-  }, [clients, campaigns]);
+      const spend = related.reduce((sum, cp) => sum + cp.spend, 0); 
+      const clicks = related.reduce((sum, cp) => sum + cp.clicks, 0);
+      const imps = related.reduce((sum, cp) => sum + cp.impressions, 0);
+      const ctr = imps > 0 ? (clicks / imps) * 100 : 0;
+      return { 
+        name: client.name, 
+        spendRaw: spend,
+        spendConverted: convert(spend), 
+        conv: related.reduce((sum, cp) => sum + cp.conversations_started, 0), 
+        ctr, 
+        id: client.id, 
+        count: related.length 
+      };
+    }).sort((a, b) => b.spendRaw - a.spendRaw);
+  }, [clients, campaigns, convert]);
+
+  const generateReport = async () => {
+    if (certifiedCampaigns.length === 0) {
+      alert("Aucune donnée disponible pour le périmètre sélectionné.");
+      return;
+    }
+    setIsGenerating(true);
+    setAiReport(null);
+    try {
+      const report = await getCampaignInsights(certifiedCampaigns);
+      setAiReport(report);
+    } catch (err) {
+      alert("Erreur lors de l'génération du rapport IA.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   return (
     <div className="space-y-8 pb-12 animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-3xl font-black text-slate-900 tracking-tight">Vue Agency Certifiée</h2>
-          <p className="text-slate-500 text-sm mt-1 font-medium">Audit en temps réel de {certifiedCampaigns.length} campagnes.</p>
+          <h2 className="text-3xl font-black text-slate-900 tracking-tight uppercase italic">Vue Agency Certifiée</h2>
+          <p className="text-slate-500 text-sm mt-1 font-medium">Analyse consolidée de {certifiedCampaigns.length} campagnes (Filtre: Started Conversations).</p>
         </div>
         <div className="flex items-center gap-3">
            <div className="bg-white px-4 py-2 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
@@ -78,18 +111,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ clients, campaigns }) =
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <KPIItem label="Ad Spend Global" value={`$${totals.spend.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} trend="+14.2%" subtitle="Portfolio audité" />
-        <KPIItem label="Conversion Agency" value={totals.conv.toLocaleString()} trend="+6.8%" subtitle="Événements validés" />
-        <KPIItem label="ROAS Consolidé" value={`${avgRoas}x`} trend="+0.4x" isPositive subtitle="Objectif: 4.0x" />
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <KPIItem label="Ad Spend" value={format(totals.spend)} trend="+14.2%" subtitle="Budget Piloté" />
+        <KPIItem label="Reach Total" value={totals.reach.toLocaleString()} trend="+12k" subtitle="Unique Viewers" />
+        <KPIItem label="Conv. Started" value={totals.conv.toLocaleString()} trend="+6.8%" subtitle="Messaging Goal" />
+        <KPIItem label="CPA Started" value={format(globalCpa)} trend="Avg" subtitle="Cost Per Message" />
+        <KPIItem label="CTR Moyen" value={`${globalCtr}%`} trend="+0.15%" subtitle="Global Account" />
+        <KPIItem label="CPM Global" value={format(globalCpm)} trend="Avg" subtitle="Cost Per 1k Imps" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
           <div className="flex justify-between items-center mb-10">
             <div>
-              <h3 className="text-xl font-bold text-slate-800">Répartition du Budget</h3>
-              <p className="text-xs text-slate-400 mt-1 uppercase font-black tracking-widest">Dépenses par compte client</p>
+              <h3 className="text-xl font-bold text-slate-800">Dépense par Client</h3>
+              <p className="text-xs text-slate-400 mt-1 uppercase font-black tracking-widest">Volume budgétaire certifié</p>
             </div>
           </div>
           <div className="h-72">
@@ -98,8 +134,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ clients, campaigns }) =
                 <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f5f9" />
                 <XAxis type="number" hide />
                 <YAxis dataKey="name" type="category" width={110} axisLine={false} tickLine={false} tick={{ fontSize: 11, fontWeight: 700, fill: '#64748b' }} />
-                <Tooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }} />
-                <Bar dataKey="spend" fill="#2563eb" radius={[0, 8, 8, 0]} barSize={24}>
+                <Tooltip 
+                  cursor={{ fill: '#f8fafc' }} 
+                  contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }}
+                  formatter={(value: any) => [format(value, 'USD'), 'Dépense']}
+                />
+                <Bar dataKey="spendRaw" fill="#2563eb" radius={[0, 8, 8, 0]} barSize={24}>
                   {clientPerformances.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
@@ -109,102 +149,91 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ clients, campaigns }) =
           </div>
         </div>
 
-        <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col items-center">
-          <h3 className="text-lg font-bold text-slate-800 mb-6 text-center w-full">Provenance des Données</h3>
-          <div className="h-48 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={sourceData} cx="50%" cy="50%" innerRadius={50} outerRadius={70} paddingAngle={5} dataKey="value">
-                  {sourceData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+        <div className="bg-slate-900 text-white p-8 rounded-[2.5rem] shadow-2xl flex flex-col items-center relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-emerald-500"></div>
+          <h3 className="text-lg font-black uppercase italic tracking-tight mb-6 text-center w-full flex items-center justify-center gap-2">
+            <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+            AI Strategist
+          </h3>
+          
+          <div className="w-full space-y-4 mb-8">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Périmètre Audit (Started)</label>
+              <select 
+                value={selectedClientForAi}
+                onChange={(e) => setSelectedClientForAi(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500 transition-all text-slate-300"
+              >
+                <option value="all" className="bg-slate-900">Portfolio Global</option>
+                {clients.map(c => (
+                  <option key={c.id} value={c.id} className="bg-slate-900">Focus: {c.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
-          <div className="mt-4 space-y-2 w-full">
-            {sourceData.map(s => (
-              <div key={s.name} className="flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: s.color }}></div>
-                  <span className="text-xs font-bold text-slate-600">{s.name}</span>
-                </div>
-                <span className="text-xs font-black text-slate-900">{s.value} cp.</span>
-              </div>
-            ))}
+
+          <div className="flex-1 flex flex-col items-center justify-center text-center space-y-4 opacity-60">
+             <div className="w-12 h-12 bg-white/5 rounded-full flex items-center justify-center border border-white/10">
+                <svg className="w-6 h-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+             </div>
+             <p className="text-[9px] font-bold uppercase tracking-widest max-w-[150px]">
+               Analyse focus conversations et santé créative.
+             </p>
           </div>
+
           <button 
-            onClick={() => navigate('/admin/campaigns')}
-            className="w-full py-3 mt-8 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all"
+            onClick={generateReport}
+            disabled={isGenerating}
+            className="w-full py-4 mt-8 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-xl shadow-blue-500/20 flex items-center justify-center gap-3"
           >
-            Lancer Audit Complet
+            {isGenerating ? (
+              <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+            ) : (
+              'Générer Audit Started'
+            )}
           </button>
         </div>
       </div>
 
-      <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/30">
-          <h3 className="text-xl font-bold text-slate-800">Portefeuilles Actifs</h3>
+      {aiReport && (
+        <div className="bg-white p-8 md:p-12 rounded-[2rem] border border-slate-200 shadow-2xl animate-in slide-in-from-bottom-4 duration-500 relative overflow-hidden">
+          <div className="flex justify-between items-start mb-8">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></div>
+                <h3 className="text-xl font-black italic uppercase tracking-tight text-slate-900">Verdict Stratégique</h3>
+              </div>
+              <p className="text-slate-400 text-[9px] font-black uppercase tracking-widest">
+                Métrique Cible : <span className="text-blue-600">Started Conversations</span>
+              </p>
+            </div>
+            <button onClick={() => setAiReport(null)} className="p-2 text-slate-300 hover:text-slate-600 transition-colors">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          </div>
+          <div className="prose prose-slate max-w-none text-slate-600 leading-relaxed font-medium">
+            {aiReport.split('\n').map((line, i) => {
+               if (line.trim() === '') return <br key={i} />;
+               const isHeading = line.match(/^\d\./) || line.startsWith('#');
+               return <p key={i} className={isHeading ? 'text-slate-900 font-black uppercase mt-4 first:mt-0' : 'pl-4 border-l-2 border-blue-50'}>{line}</p>;
+            })}
+          </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
-              <tr>
-                <th className="px-8 py-6">Client</th>
-                <th className="px-8 py-6">Campagnes</th>
-                <th className="px-8 py-6 text-right">Dépense Totale</th>
-                <th className="px-8 py-6 text-right">ROAS Moyen</th>
-                <th className="px-8 py-6 text-right">Statut</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {clientPerformances.map((stat) => (
-                <tr key={stat.id} className="hover:bg-slate-50/80 transition-all group">
-                  <td className="px-8 py-7">
-                    <div className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors">{stat.name}</div>
-                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">Compte Actif</div>
-                  </td>
-                  <td className="px-8 py-7">
-                    <span className="px-3 py-1.5 bg-slate-100 text-slate-600 rounded-xl text-xs font-black border border-slate-200">
-                      {stat.count} actives
-                    </span>
-                  </td>
-                  <td className="px-8 py-7 text-right font-black text-slate-900 tabular-nums text-lg">${stat.spend.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
-                  <td className="px-8 py-7 text-right">
-                    <span className={`px-4 py-1.5 rounded-xl font-black tabular-nums text-sm ${stat.roas > 4 ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-slate-50 text-slate-600 border border-slate-200'}`}>
-                      {stat.roas.toFixed(2)}x
-                    </span>
-                  </td>
-                  <td className="px-8 py-7 text-right">
-                    <button 
-                      onClick={() => navigate(`/client/dashboard/${stat.id}`)} 
-                      className="text-[10px] font-black text-blue-600 hover:text-white hover:bg-blue-600 bg-blue-50 px-5 py-2.5 rounded-xl transition-all border border-blue-100 hover:border-blue-600 uppercase tracking-widest"
-                    >
-                      Audit
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      )}
     </div>
   );
 };
 
-const KPIItem = ({ label, value, trend, isPositive = true, subtitle }: { label: string, value: string, trend: string, isPositive?: boolean, subtitle: string }) => (
-  <div className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group">
-    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 group-hover:text-blue-500 transition-colors">{label}</p>
-    <div className="flex items-baseline gap-3 mb-4">
-      <span className="text-4xl font-black text-slate-900 tabular-nums">{value}</span>
-      <span className={`text-[10px] font-black px-2 py-1 rounded-lg ${isPositive ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-red-50 text-red-600 border border-red-100'}`}>{trend}</span>
+const KPIItem = ({ label, value, trend, subtitle }: any) => (
+  <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:-translate-y-1 transition-all duration-300 group">
+    <div className="flex justify-between items-start mb-4">
+      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{label}</span>
+      <span className="text-[8px] font-black text-emerald-500 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">{trend}</span>
     </div>
-    <div className="flex items-center gap-2 pt-4 border-t border-slate-50">
-       <div className={`w-2 h-2 rounded-full ${isPositive ? 'bg-emerald-400' : 'bg-red-400'}`}></div>
-       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{subtitle}</span>
-    </div>
+    <div className="text-2xl font-black text-slate-900 tracking-tight group-hover:text-blue-600 transition-colors">{value}</div>
+    <div className="text-[9px] font-bold text-slate-300 uppercase tracking-widest mt-1 italic">{subtitle}</div>
   </div>
 );
 

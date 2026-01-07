@@ -5,8 +5,12 @@ import { supabase } from './supabase';
 class DatabaseEngine {
   private LOCAL_STORAGE_KEY = 'adpulse_local_db';
 
+  /**
+   * Note: The currency formatting is now handled via the useCurrency hook
+   * to support real-time exchange rates and user preference.
+   */
   formatCurrency(amount: number, currency: string = 'USD'): string {
-    return new Intl.NumberFormat(currency === 'EUR' ? 'fr-FR' : 'en-US', {
+    return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: currency,
       maximumFractionDigits: 0
@@ -25,7 +29,6 @@ class DatabaseEngine {
   async fetchAll() {
     console.log("--- Syncing from Cloud (Supabase) ---");
     
-    // Initial data structure
     let data = {
       clients: [] as Client[],
       campaigns: [] as CampaignStats[],
@@ -58,21 +61,18 @@ class DatabaseEngine {
         aiReports: []
       };
 
-      // Update cache on successful fetch
       this.saveLocalData(data);
       console.log("--- Cloud Sync Success ---");
       return data;
     } catch (error: any) {
       console.error("Supabase Connection Error (Falling back to local):", error.message);
       
-      // Fallback to local storage if network fails
       const cached = this.getLocalData();
       if (cached) {
         console.log("--- Using Cached Local Data ---");
         return cached;
       }
       
-      // If no cache, return empty but valid structure
       return data;
     }
   }

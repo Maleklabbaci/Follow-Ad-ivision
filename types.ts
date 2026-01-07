@@ -39,8 +39,8 @@ export interface CreativePerformance {
   type: 'VIDEO' | 'IMAGE' | 'CAROUSEL';
   spend: number;
   conversions: number;
-  hook_rate: number; // % de gens qui regardent les 3 premières secondes
-  hold_rate: number; // % de gens qui regardent 50%+
+  hook_rate: number;
+  hold_rate: number;
   roas: number;
 }
 
@@ -82,17 +82,17 @@ export interface CampaignStats {
   reach: number;
   frequency: number;
   clicks: number;
-  conversions: number;
+  conversations_started: number; // Remplace conversions
+  conversion_action_type: string; 
   ctr: number;
   cpc: number;
   cpm: number;
-  cpa: number;
+  cpa_conversation_started: number; // Remplace cpa
   roas: number;
   status: 'ACTIVE' | 'PAUSED' | 'ARCHIVED';
   lastSync?: string;
   dataSource: 'MOCK' | 'REAL_API';
   isValidated?: boolean;
-  // Fix: Added auditLogs to fix type error in AdminCampaigns.tsx
   auditLogs?: string[];
 }
 

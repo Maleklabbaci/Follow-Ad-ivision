@@ -3,6 +3,7 @@ import React, { useMemo, useState } from 'react';
 import { Outlet, useLocation, useParams, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { User, Client, UserRole } from '../types';
+import { useCurrency } from '../contexts/CurrencyContext';
 
 interface LayoutProps {
   user: User;
@@ -15,6 +16,7 @@ const Layout: React.FC<LayoutProps> = ({ user, onLogout, clients }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { currency, setCurrency, rates } = useCurrency();
 
   const isImpersonating = useMemo(() => {
     return user.role === UserRole.ADMIN && location.pathname.includes('/client/dashboard/') && clientId;
@@ -80,13 +82,32 @@ const Layout: React.FC<LayoutProps> = ({ user, onLogout, clients }) => {
               {user.role === 'ADMIN' ? 'Control' : user.name}
             </h1>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="hidden sm:flex flex-col items-end">
-              <span className="text-xs font-black text-slate-700 uppercase tracking-tighter">{user.name}</span>
-              <span className="text-[10px] text-blue-600 font-bold uppercase tracking-widest">{user.role}</span>
+          
+          <div className="flex items-center gap-2 md:gap-6">
+            {/* Currency Selector */}
+            <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl px-2 py-1 gap-1">
+              <svg className="w-3 h-3 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <select 
+                value={currency} 
+                onChange={(e) => setCurrency(e.target.value)}
+                className="bg-transparent text-[10px] font-black uppercase tracking-widest outline-none border-none cursor-pointer"
+              >
+                {Object.keys(rates).map(cur => (
+                  <option key={cur} value={cur}>{cur}</option>
+                ))}
+              </select>
             </div>
-            <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-black border-2 border-white shadow-sm ring-1 ring-blue-100">
-              {user.name.charAt(0)}
+
+            <div className="flex items-center gap-3">
+              <div className="hidden sm:flex flex-col items-end">
+                <span className="text-xs font-black text-slate-700 uppercase tracking-tighter">{user.name}</span>
+                <span className="text-[10px] text-blue-600 font-bold uppercase tracking-widest">{user.role}</span>
+              </div>
+              <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-black border-2 border-white shadow-sm ring-1 ring-blue-100">
+                {user.name.charAt(0)}
+              </div>
             </div>
           </div>
         </header>

@@ -12,16 +12,14 @@ const ClientInsights: React.FC<ClientInsightsProps> = ({ user, campaigns = [] })
   const [insights, setInsights] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Retrieve campaigns linked to this client context safely from props
   const clientCampaigns = useMemo(() => {
     if (!user?.clientId || !Array.isArray(campaigns)) return [];
     
-    // Fallback if client management data isn't easily accessible, 
-    // we use a safe look-up in the app's global state passed via context or parent
-    const savedClientsRaw = localStorage.getItem('app_clients');
+    const savedClientsRaw = localStorage.getItem('adpulse_local_db');
     let clientCampaignIds: string[] = [];
     try {
-      const allClients = JSON.parse(savedClientsRaw || '[]');
+      const db = JSON.parse(savedClientsRaw || '{}');
+      const allClients = db.clients || [];
       const currentClient = allClients.find((c: Client) => c.id === user.clientId);
       clientCampaignIds = Array.isArray(currentClient?.campaignIds) ? currentClient.campaignIds : [];
     } catch { clientCampaignIds = []; }
@@ -31,7 +29,7 @@ const ClientInsights: React.FC<ClientInsightsProps> = ({ user, campaigns = [] })
 
   const handleGenerate = async () => {
     if (clientCampaigns.length === 0) {
-      alert("No active campaigns found to analyze.");
+      alert("Aucune donnée disponible pour l'audit.");
       return;
     }
 
@@ -39,60 +37,64 @@ const ClientInsights: React.FC<ClientInsightsProps> = ({ user, campaigns = [] })
     setInsights(null);
     try {
       const result = await getCampaignInsights(clientCampaigns);
-      setInsights(result || "Analyse terminée sans recommandations spécifiques.");
+      setInsights(result);
     } catch (err) {
       console.error(err);
-      alert("Erreur lors de la génération d'insights. Vérifiez votre clé API.");
+      alert("Erreur lors de l'audit.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm h-full flex flex-col">
-      <div className="flex flex-col gap-6 flex-1">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></div>
-            <h2 className="text-xl font-black text-slate-900 tracking-tight uppercase">Audit IA Stratégique</h2>
+    <div className="bg-white p-6 md:p-8 rounded-[2rem] border border-slate-200 shadow-sm flex flex-col relative overflow-hidden h-full">
+      <div className="relative z-10 flex flex-col gap-6 h-full">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-black text-slate-900 tracking-tight uppercase italic flex items-center gap-2">
+              <span className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></span>
+              Santé IA
+            </h2>
+            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Analyse de vitalité créative</p>
           </div>
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Powered by Gemini 3.0 Pro</p>
+          {insights && (
+            <button onClick={() => setInsights(null)} className="text-slate-400 hover:text-slate-600 transition-colors">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+            </button>
+          )}
         </div>
         
         {!insights && !loading && (
-          <div className="flex-1 flex flex-col items-center justify-center py-10 text-center bg-slate-50/50 rounded-[2rem] border border-dashed border-slate-200">
-             <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4 text-blue-600">
+          <div className="flex-1 flex flex-col items-center justify-center py-10 text-center">
+             <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mb-6 shadow-sm border border-blue-100">
                <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                </svg>
              </div>
-             <p className="text-sm font-black text-slate-600 px-8 uppercase tracking-tight">Analyse prête pour {clientCampaigns.length} campagnes.</p>
-             <p className="text-[10px] text-slate-400 mt-2 font-bold px-8">Validation ROI & Optimisation Budget</p>
+             <p className="text-xs font-black text-slate-800 uppercase tracking-tight px-6 italic">Comment vont tes publicités ?</p>
+             <p className="text-[10px] text-slate-400 mt-2 font-bold px-10">Laisse l'IA analyser ton contenu et ton audience sans te perdre dans les chiffres.</p>
           </div>
         )}
 
         {loading && (
-          <div className="flex-1 flex flex-col items-center justify-center py-10 space-y-4">
-             <div className="relative w-12 h-12">
-               <div className="absolute inset-0 border-4 border-blue-100 rounded-full"></div>
-               <div className="absolute inset-0 border-4 border-blue-600 rounded-full border-t-transparent animate-spin"></div>
-             </div>
-             <p className="text-xs font-black text-blue-600 uppercase tracking-widest animate-pulse">Intelligence en cours...</p>
+          <div className="flex-1 flex flex-col items-center justify-center py-12 space-y-4">
+             <div className="w-10 h-10 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin"></div>
+             <p className="text-[10px] font-black text-blue-600 uppercase tracking-[0.2em] animate-pulse">Scan créatif en cours...</p>
           </div>
         )}
 
         {insights && (
-          <div className="flex-1 p-6 bg-slate-900 text-white rounded-[2rem] text-sm leading-relaxed overflow-y-auto max-h-[400px] custom-scrollbar border border-white/10">
-            <div className="flex items-center gap-2 mb-4">
-               <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Rapport Gemini</span>
-               <div className="h-px flex-1 bg-white/10"></div>
-            </div>
-            <div className="space-y-4 font-medium opacity-90">
-              {insights.split('\n').map((line, i) => (
-                <p key={i} className={line.startsWith('#') ? 'font-black text-blue-400 text-base mt-6' : ''}>
-                  {line.replace(/^#+\s*/, '')}
-                </p>
-              ))}
+          <div className="flex-1 overflow-y-auto custom-scrollbar bg-slate-50 rounded-2xl p-6 border border-slate-100">
+            <div className="prose prose-sm max-w-none text-slate-600 leading-relaxed font-medium">
+              {insights.split('\n').map((line, i) => {
+                if (line.trim() === '') return <br key={i} />;
+                const isHeading = line.match(/^\d\./) || line.startsWith('#');
+                return (
+                  <p key={i} className={`${isHeading ? 'text-slate-900 font-black text-xs uppercase tracking-tight mt-4 first:mt-0 mb-2 border-b border-slate-200 pb-1' : 'text-[11px] mb-2 pl-2 border-l-2 border-blue-100'}`}>
+                    {line.replace(/^#+\s*/, '').replace(/^\d\.\s*/, '')}
+                  </p>
+                );
+              })}
             </div>
           </div>
         )}
@@ -100,9 +102,9 @@ const ClientInsights: React.FC<ClientInsightsProps> = ({ user, campaigns = [] })
         <button 
           onClick={handleGenerate} 
           disabled={loading || clientCampaigns.length === 0}
-          className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-black transition-all disabled:opacity-30 flex items-center justify-center gap-3 shadow-2xl shadow-slate-200"
+          className="w-full py-4 bg-slate-900 text-white rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-black transition-all flex items-center justify-center gap-2 shadow-xl shadow-slate-100 active:scale-95 disabled:opacity-30"
         >
-          {loading ? 'Traitement IA...' : 'Générer Audit Stratégique'}
+          {loading ? 'Analyse...' : insights ? 'Refaire l\'audit' : 'Lancer mon audit'}
         </button>
       </div>
     </div>

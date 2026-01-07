@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { User, UserRole, Client, CampaignStats, IntegrationSecret, AuditLog, AiReport } from './types';
 import { DB } from './services/db';
+import { CurrencyProvider } from './contexts/CurrencyContext';
 import Layout from './components/Layout';
 import AdminDashboard from './pages/AdminDashboard';
 import ClientDashboard from './pages/ClientDashboard';
@@ -41,7 +42,6 @@ const App: React.FC = () => {
       } catch (err) {
         console.warn("Soft initialization error, using local defaults if available.");
       } finally {
-        // We delay slightly for UX feel
         setTimeout(() => setIsInitializing(false), 500);
       }
     };
@@ -80,20 +80,22 @@ const App: React.FC = () => {
   }
 
   return (
-    <HashRouter>
-      <Routes>
-        <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login onLogin={handleLogin} users={users} />} />
-        <Route element={user ? <Layout user={user} onLogout={handleLogout} clients={clients} /> : <Navigate to="/login" replace />}>
-          <Route path="/" element={user?.role === UserRole.ADMIN ? <AdminDashboard clients={clients} campaigns={campaigns} /> : <Navigate to="/client/dashboard" replace />} />
-          <Route path="/admin/clients" element={<AdminClients clients={clients} setClients={setClients} users={users} setUsers={setUsers} secrets={secrets} />} />
-          <Route path="/admin/campaigns" element={<AdminCampaigns clients={clients} setClients={setClients} campaigns={campaigns} setCampaigns={setCampaigns} secrets={secrets} />} />
-          <Route path="/admin/sql-editor" element={<AdminSqlEditor clients={clients} campaigns={campaigns} secrets={secrets} users={users} auditLogs={auditLogs} aiReports={aiReports} />} />
-          <Route path="/admin/settings" element={<AdminSettings secrets={secrets} setSecrets={setSecrets} />} />
-          <Route path="/client/dashboard/:clientId?" element={<ClientDashboard user={user} campaigns={campaigns} clients={clients} secrets={secrets} />} />
-        </Route>
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </HashRouter>
+    <CurrencyProvider>
+      <HashRouter>
+        <Routes>
+          <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login onLogin={handleLogin} users={users} />} />
+          <Route element={user ? <Layout user={user} onLogout={handleLogout} clients={clients} /> : <Navigate to="/login" replace />}>
+            <Route path="/" element={user?.role === UserRole.ADMIN ? <AdminDashboard clients={clients} campaigns={campaigns} /> : <Navigate to="/client/dashboard" replace />} />
+            <Route path="/admin/clients" element={<AdminClients clients={clients} setClients={setClients} users={users} setUsers={setUsers} secrets={secrets} />} />
+            <Route path="/admin/campaigns" element={<AdminCampaigns clients={clients} setClients={setClients} campaigns={campaigns} setCampaigns={setCampaigns} secrets={secrets} />} />
+            <Route path="/admin/sql-editor" element={<AdminSqlEditor clients={clients} campaigns={campaigns} secrets={secrets} users={users} auditLogs={auditLogs} aiReports={aiReports} />} />
+            <Route path="/admin/settings" element={<AdminSettings secrets={secrets} setSecrets={setSecrets} />} />
+            <Route path="/client/dashboard/:clientId?" element={<ClientDashboard user={user} campaigns={campaigns} clients={clients} secrets={secrets} />} />
+          </Route>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </HashRouter>
+    </CurrencyProvider>
   );
 };
 
