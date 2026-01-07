@@ -40,6 +40,7 @@ export interface CampaignStats {
   name: string;
   date: string;
   spend: number;
+  currency: string; // Ajouté: 'USD', 'EUR', 'GBP', etc.
   impressions: number;
   reach: number;
   frequency: number;

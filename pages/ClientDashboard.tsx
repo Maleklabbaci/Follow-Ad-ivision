@@ -2,6 +2,7 @@
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { User, CampaignStats, Client, UserRole } from '../types';
+import { DB } from '../services/db';
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, Line, Bar } from 'recharts';
 import ClientInsights from './ClientInsights';
 
@@ -34,6 +35,10 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns = [],
     const ids = Array.isArray(activeClient.campaignIds) ? activeClient.campaignIds : [];
     return campaigns.filter(c => c && ids.includes(c.campaignId));
   }, [campaigns, activeClient]);
+
+  const clientCurrency = useMemo(() => {
+    return clientCampaigns[0]?.currency || 'USD';
+  }, [clientCampaigns]);
 
   const triggerRefresh = useCallback(() => {
     setIsRefreshing(true);
@@ -69,7 +74,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns = [],
   }, [clientCampaigns]);
 
   const avgRoas = clientCampaigns.length > 0 ? (totals.roasSum / clientCampaigns.length).toFixed(2) : '0.00';
-  const avgCpm = totals.impressions > 0 ? ((totals.spend / totals.impressions) * 1000).toFixed(2) : '0.00';
+  const avgCpm = totals.impressions > 0 ? (totals.spend / totals.impressions) * 1000 : 0;
   const avgReach = totals.reach.toLocaleString();
 
   return (
@@ -83,7 +88,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns = [],
             </div>
           </div>
           <p className="text-slate-500 text-[10px] md:text-sm font-bold uppercase tracking-widest mt-1">
-            {clientCampaigns.length} Campagnes • {lastUpdate.toLocaleTimeString()}
+            {clientCampaigns.length} Campagnes • Audité en {clientCurrency}
           </p>
         </div>
         <div className="flex items-center gap-3 md:gap-4 bg-white border border-slate-200 px-4 md:px-6 py-3 md:py-4 rounded-2xl md:rounded-[2rem] shadow-sm w-full md:w-auto justify-between md:justify-start">
@@ -99,21 +104,24 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns = [],
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         <KPIBox label="ROAS Global" value={`${avgRoas}x`} color="indigo" sub="Performance" />
-        <KPIBox label="Ventes" value={totals.conv.toString()} color="emerald" sub="Validé Pixel" />
         <KPIBox label="Reach Unique" value={avgReach} color="blue" sub="Touchés" />
-        <KPIBox label="CPM Moyen" value={`$${avgCpm}`} color="white" sub="Coût/1k Imps" />
+        <KPIBox label="Spend Total" value={DB.formatCurrency(totals.spend, clientCurrency)} color="white" sub="Dépense Meta" />
+        <KPIBox label="CPM Moyen" value={DB.formatCurrency(avgCpm, clientCurrency)} color="emerald" sub="Coût/1k Imps" />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className="xl:col-span-2 bg-white p-6 md:p-10 rounded-2xl md:rounded-[2.5rem] border border-slate-200 shadow-sm relative overflow-hidden">
-          <h3 className="text-lg md:text-xl font-black text-slate-800 tracking-tight mb-6 md:mb-8 uppercase italic">Analyse de Rentabilité</h3>
+          <h3 className="text-lg md:text-xl font-black text-slate-800 tracking-tight mb-6 md:mb-8 uppercase italic">Analyse de Rentabilité ({clientCurrency})</h3>
           <div className={`h-64 md:h-80 transition-all ${isRefreshing ? 'opacity-30 blur-sm' : 'opacity-100'}`}>
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={clientCampaigns.slice(0, 8)}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 8, fontWeight: 900, fill: '#94a3b8' }} hide={window.innerWidth < 768} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 8, fontWeight: 900, fill: '#94a3b8' }} />
-                <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)', fontSize: '10px' }} />
+                <Tooltip 
+                  formatter={(value: any, name: string) => [name === 'spend' ? DB.formatCurrency(value, clientCurrency) : value, name.toUpperCase()]}
+                  contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)', fontSize: '10px' }} 
+                />
                 <Bar dataKey="spend" fill="#2563eb" radius={[6, 6, 0, 0]} barSize={window.innerWidth < 768 ? 20 : 40} />
                 <Line type="monotone" dataKey="roas" stroke="#10b981" strokeWidth={window.innerWidth < 768 ? 3 : 6} dot={{ r: 4, fill: '#10b981', strokeWidth: 2, stroke: '#fff' }} />
               </ComposedChart>
@@ -127,7 +135,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns = [],
 
       <div className="bg-white rounded-2xl md:rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
         <div className="p-6 md:p-10 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50/20">
-          <h3 className="text-lg md:text-2xl font-black text-slate-800 tracking-tight italic uppercase">Audit Meta</h3>
+          <h3 className="text-lg md:text-2xl font-black text-slate-800 tracking-tight italic uppercase">Audit Meta ({clientCurrency})</h3>
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 md:w-3 md:h-3 bg-emerald-500 rounded-full animate-pulse"></span>
             <span className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest">LIVE GRAPH API</span>
@@ -151,7 +159,9 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns = [],
                     <div className="font-black text-slate-900 group-hover:text-blue-600 transition-colors text-xs md:text-sm">{cp.name}</div>
                     <div className="text-[8px] font-bold text-blue-500 uppercase tracking-widest">LIVE • {cp.campaignId.slice(-8)}</div>
                   </td>
-                  <td className="px-6 md:px-10 py-6 md:py-8 text-right font-black tabular-nums text-slate-900 text-xs md:text-sm">${cp.spend.toLocaleString()}</td>
+                  <td className="px-6 md:px-10 py-6 md:py-8 text-right font-black tabular-nums text-slate-900 text-xs md:text-sm">
+                    {DB.formatCurrency(cp.spend, cp.currency)}
+                  </td>
                   <td className="px-6 md:px-10 py-6 md:py-8 text-right font-black tabular-nums text-slate-500 text-xs md:text-sm">{cp.reach?.toLocaleString() || '---'}</td>
                   <td className={`px-6 md:px-10 py-6 md:py-8 text-right font-black tabular-nums text-xs md:text-sm ${cp.conversions > 0 ? 'text-emerald-600' : 'text-slate-200'}`}>
                     {cp.conversions || 0}

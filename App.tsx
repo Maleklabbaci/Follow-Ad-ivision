@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { User, UserRole, Client, CampaignStats, IntegrationSecret } from './types';
+import { DB } from './services/db';
 import Layout from './components/Layout';
 import AdminDashboard from './pages/AdminDashboard';
 import ClientDashboard from './pages/ClientDashboard';
@@ -13,53 +14,26 @@ import Login from './pages/Login';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(() => {
-    try {
-      const saved = localStorage.getItem('auth_user');
-      return saved ? JSON.parse(saved) : null;
-    } catch { return null; }
+    const saved = localStorage.getItem('auth_session');
+    return saved ? JSON.parse(saved) : null;
   });
 
-  const [clients, setClients] = useState<Client[]>(() => {
-    try {
-      const saved = localStorage.getItem('app_clients');
-      const parsed = saved ? JSON.parse(saved) : [];
-      if (!Array.isArray(parsed) || parsed.length === 0) {
-        return [
-          { id: 'c1', name: 'Elite Fitness Pro', email: 'contact@fitness.com', createdAt: '2024-01-01', adAccounts: ['act_12345678'], campaignIds: ['cp_1', 'cp_2'] },
-          { id: 'c2', name: 'Bloom Boutique', email: 'client@bloom.com', createdAt: '2024-02-15', adAccounts: ['act_87654321'], campaignIds: ['cp_3', 'cp_4'] }
-        ];
-      }
-      return parsed.map(c => ({ 
-        ...c, 
-        campaignIds: Array.isArray(c.campaignIds) ? c.campaignIds : [], 
-        adAccounts: Array.isArray(c.adAccounts) ? c.adAccounts : [] 
-      }));
-    } catch { return []; }
-  });
+  const [clients, setClients] = useState<Client[]>(() => DB.getClients());
+  const [secrets, setSecrets] = useState<IntegrationSecret[]>(() => DB.getSecrets());
+  const [campaigns, setCampaigns] = useState<CampaignStats[]>(() => DB.getCampaigns());
 
-  const [secrets, setSecrets] = useState<IntegrationSecret[]>(() => {
-    try {
-      const saved = localStorage.getItem('app_secrets');
-      const parsed = JSON.parse(saved || '[]');
-      return Array.isArray(parsed) ? parsed : [];
-    } catch { return []; }
-  });
-
-  const [campaigns, setCampaigns] = useState<CampaignStats[]>(() => {
-    try {
-      const saved = localStorage.getItem('app_campaigns');
-      const parsed = JSON.parse(saved || '[]');
-      return Array.isArray(parsed) ? parsed : [];
-    } catch { return []; }
-  });
+  useEffect(() => { DB.saveClients(clients); }, [clients]);
+  useEffect(() => { DB.saveSecrets(secrets); }, [secrets]);
+  useEffect(() => { DB.saveCampaigns(campaigns); }, [campaigns]);
 
   const sanitizeCampaign = useCallback((cp: any): CampaignStats => {
     const spend = Math.max(0, parseFloat(String(cp.spend)) || 0);
-    const clicks = Math.max(0, parseInt(String(cp.clicks)) || 0);
     const conv = Math.max(0, parseInt(String(cp.conversions)) || 0);
     const imps = Math.max(0, parseInt(String(cp.impressions)) || 0);
     const reach = Math.max(0, parseInt(String(cp.reach)) || Math.round(imps * 0.8));
-    const AOV = 145.00; 
+    const clicks = Math.max(0, parseInt(String(cp.clicks)) || 0);
+    const currency = cp.currency || 'USD';
+    const AOV = currency === 'EUR' ? 135.00 : 145.00; 
 
     return {
       id: cp.id || `cp_${Math.random().toString(36).substring(2, 9)}`,
@@ -67,6 +41,7 @@ const App: React.FC = () => {
       name: cp.name || 'Untitled Campaign',
       date: cp.date || new Date().toISOString(),
       spend: spend,
+      currency: currency,
       clicks: clicks,
       conversions: conv,
       impressions: imps,
@@ -86,49 +61,34 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const needsHeal = campaigns.some(c => typeof c.spend !== 'number' || !c.reach);
-    if (needsHeal) {
-      setCampaigns(prev => prev.map(sanitizeCampaign));
-    }
-  }, [campaigns.length, sanitizeCampaign]);
-
-  useEffect(() => {
-    if (clients.length === 0) return;
-    const assignedIds = new Set(clients.flatMap(c => c.campaignIds || []));
-    const existingIds = new Set(campaigns.map(c => c.campaignId));
-    const missingIds = Array.from(assignedIds).filter(id => !existingIds.has(id));
-    
-    if (missingIds.length > 0) {
-      setCampaigns(prev => {
-        const newEntries = missingIds.map(id => {
-          const owner = clients.find(c => c.campaignIds?.includes(id));
-          return sanitizeCampaign({
-            campaignId: id,
-            name: `Campaign ${id} (${owner?.name || 'New'})`,
-            spend: 850 + Math.random() * 2000, 
-            impressions: 45000 + Math.floor(Math.random() * 20000),
-            clicks: 1200 + Math.floor(Math.random() * 800),
-            conversions: 85 + Math.floor(Math.random() * 60),
-            dataSource: 'MOCK'
-          });
+    if (campaigns.length === 0 && clients.length > 0) {
+      const allLinkedIds = clients.flatMap(c => c.campaignIds);
+      const newEntries = allLinkedIds.map(id => {
+        const owner = clients.find(c => c.campaignIds?.includes(id));
+        const isFitness = owner?.name.includes('Fitness');
+        return sanitizeCampaign({
+          campaignId: id,
+          name: `Marketing Campaign ${id} (${owner?.name})`,
+          spend: 1200 + Math.random() * 3000, 
+          impressions: 85000 + Math.floor(Math.random() * 50000),
+          clicks: 2500 + Math.floor(Math.random() * 1500),
+          conversions: 45 + Math.floor(Math.random() * 120),
+          currency: isFitness ? 'USD' : 'EUR',
+          dataSource: 'MOCK'
         });
-        return [...prev, ...newEntries];
       });
+      setCampaigns(newEntries);
     }
   }, [clients, campaigns.length, sanitizeCampaign]);
 
-  useEffect(() => { localStorage.setItem('app_clients', JSON.stringify(clients)); }, [clients]);
-  useEffect(() => { localStorage.setItem('app_secrets', JSON.stringify(secrets)); }, [secrets]);
-  useEffect(() => { localStorage.setItem('app_campaigns', JSON.stringify(campaigns)); }, [campaigns]);
-
   const handleLogin = (u: User) => {
     setUser(u);
-    localStorage.setItem('auth_user', JSON.stringify(u));
+    localStorage.setItem('auth_session', JSON.stringify(u));
   };
 
   const handleLogout = () => {
     setUser(null);
-    localStorage.removeItem('auth_user');
+    localStorage.removeItem('auth_session');
   };
 
   return (
@@ -141,7 +101,7 @@ const App: React.FC = () => {
           <Route path="/admin/campaigns" element={<AdminCampaigns clients={clients} setClients={setClients} campaigns={campaigns} setCampaigns={setCampaigns} secrets={secrets} />} />
           <Route path="/admin/sql-editor" element={<AdminSqlEditor clients={clients} campaigns={campaigns} secrets={secrets} />} />
           <Route path="/admin/settings" element={<AdminSettings secrets={secrets} setSecrets={setSecrets} />} />
-          <Route path="/client/dashboard/:clientId?" element={<ClientDashboard user={user} campaigns={campaigns} clients={clients} secrets={secrets} />} />
+          <Route path="/client/dashboard/:clientId?" element={<ClientDashboard user={user} campaigns={campaigns} clients={clients} />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

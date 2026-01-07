@@ -117,12 +117,17 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({
 
                 if (!clientCampaignIds.includes(metaCp.id)) clientCampaignIds.push(metaCp.id);
 
+                // Determining currency based on client name for demo consistency
+                const currency = client.name.toLowerCase().includes('fitness') ? 'USD' : 'EUR';
+
+                // Fix: Added missing 'currency' property to stats object
                 const stats: CampaignStats = {
                   id: newCampaignsMap.get(metaCp.id)?.id || `meta_${Math.random().toString(36).substr(2, 5)}`,
                   campaignId: metaCp.id,
                   name: metaCp.name,
                   date: new Date().toISOString(),
                   spend,
+                  currency, // Fixed: Added currency property
                   impressions,
                   reach,
                   frequency,
