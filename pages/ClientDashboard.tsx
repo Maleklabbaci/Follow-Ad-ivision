@@ -77,7 +77,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns = [],
   }, [clientCampaigns]);
 
   const avgRoas = clientCampaigns.length > 0 ? (totals.roasSum / clientCampaigns.length).toFixed(2) : '0.00';
-  const globalCpc = totals.clicks > 0 ? (totals.spend / totals.clicks).toFixed(2) : '0.00';
+  const globalCpc = totals.clicks > 0 ? (totals.spend / totals.clicks).toFixed(3) : '0.000';
   const globalCtr = totals.impressions > 0 ? ((totals.clicks / totals.impressions) * 100).toFixed(2) : '0.00';
 
   const chartData = useMemo(() => {
@@ -100,17 +100,17 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns = [],
           <div className="flex items-center gap-3">
             <h2 className="text-3xl font-black text-slate-900 tracking-tighter italic uppercase">{activeClient.name}</h2>
             <div className={`px-3 py-1 rounded-xl text-[10px] font-black border uppercase tracking-widest ${isRefreshing ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-emerald-50 text-emerald-600 border-emerald-200'}`}>
-              {isRefreshing ? 'Sync Meta...' : 'Source Certifiée'}
+              {isRefreshing ? 'Sync Meta Graph...' : 'Source API Certifiée'}
             </div>
           </div>
           <p className="text-slate-500 text-sm font-bold uppercase tracking-widest mt-1">
-            {clientCampaigns.length} Campagnes Extraites • Sync: {lastUpdate.toLocaleTimeString()}
+            {clientCampaigns.length} Campagnes Actives • Dernière Sync: {lastUpdate.toLocaleTimeString()}
           </p>
         </div>
         <div className="flex gap-2">
           <div className="bg-white border border-slate-200 px-5 py-3 rounded-2xl flex items-center gap-4 shadow-sm">
              <div className="text-right">
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Auto-Refresh</p>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Rafraîchissement</p>
                 <p className="text-xs font-black text-blue-600 tabular-nums">{refreshCountdown}s</p>
              </div>
              <button onClick={triggerRefresh} className="p-2 hover:bg-slate-100 rounded-xl transition-all">
@@ -121,17 +121,17 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns = [],
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
-        <KPIBox label="Total Spend" value={`$${totals.spend.toLocaleString()}`} color="blue" isRefreshing={isRefreshing} />
-        <KPIBox label="Achats/Conv" value={totals.conv.toString()} color="emerald" isRefreshing={isRefreshing} />
-        <KPIBox label="ROAS" value={`${avgRoas}x`} color="indigo" isRefreshing={isRefreshing} />
+        <KPIBox label="Investissement" value={`$${totals.spend.toLocaleString()}`} color="blue" isRefreshing={isRefreshing} />
+        <KPIBox label="Achats (Pixel)" value={totals.conv.toString()} color="emerald" isRefreshing={isRefreshing} />
+        <KPIBox label="ROAS Global" value={`${avgRoas}x`} color="indigo" isRefreshing={isRefreshing} />
         <KPIBox label="CPC Moyen" value={`$${globalCpc}`} color="white" isRefreshing={isRefreshing} />
-        <KPIBox label="CTR" value={`${globalCtr}%`} color="white" isRefreshing={isRefreshing} />
+        <KPIBox label="CTR Global" value={`${globalCtr}%`} color="white" isRefreshing={isRefreshing} />
         <KPIBox label="Impressions" value={totals.impressions.toLocaleString()} color="white" isRefreshing={isRefreshing} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className="xl:col-span-2 bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm relative overflow-hidden">
-          <h3 className="text-xl font-black text-slate-800 tracking-tight mb-8">COURBE DE RENTABILITÉ</h3>
+          <h3 className="text-xl font-black text-slate-800 tracking-tight mb-8">PROGRESSION DES PERFORMANCES</h3>
           <div className={`h-80 transition-opacity ${isRefreshing ? 'opacity-30' : 'opacity-100'}`}>
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={chartData}>
@@ -151,17 +151,18 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns = [],
       </div>
 
       <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-8 border-b border-slate-100 flex justify-between items-center">
-          <h3 className="text-xl font-black text-slate-800 tracking-tight">DÉTAIL DES EXTRACTIONS</h3>
-          <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Source: Meta Graph API v19.0</span>
+        <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/20">
+          <h3 className="text-xl font-black text-slate-800 tracking-tight italic">DATA EXTRACTION LOG</h3>
+          <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Graph API Engine v19.0</span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
               <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
-                <th className="px-10 py-6">Campagne</th>
+                <th className="px-10 py-6">Campagne Certifiée</th>
                 <th className="px-10 py-6 text-right">Dépense</th>
-                <th className="px-10 py-6 text-right">Conv.</th>
+                <th className="px-10 py-6 text-right">Achats</th>
+                <th className="px-10 py-6 text-right">CTR</th>
                 <th className="px-10 py-6 text-right">CPC</th>
                 <th className="px-10 py-6 text-right">ROAS</th>
               </tr>
@@ -170,17 +171,25 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns = [],
               {clientCampaigns.map(cp => (
                 <tr key={cp.id} className="hover:bg-slate-50 transition-all group">
                   <td className="px-10 py-7">
-                    <div className="font-black text-slate-900">{cp.name}</div>
-                    <div className="text-[9px] font-bold text-blue-500 uppercase tracking-tighter">API DATA • {cp.campaignId}</div>
+                    <div className="font-black text-slate-900 group-hover:text-blue-600 transition-colors">{cp.name}</div>
+                    <div className="text-[9px] font-bold text-blue-500 uppercase tracking-tighter">DATA RÉELLE • {cp.campaignId}</div>
                   </td>
                   <td className="px-10 py-7 text-right font-black tabular-nums">${cp.spend.toLocaleString()}</td>
-                  <td className="px-10 py-7 text-right font-black tabular-nums text-emerald-600">{cp.conversions}</td>
+                  <td className={`px-10 py-7 text-right font-black tabular-nums ${cp.conversions > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>{cp.conversions}</td>
+                  <td className="px-10 py-7 text-right font-bold tabular-nums text-slate-400">{(cp.ctr * 100).toFixed(2)}%</td>
                   <td className="px-10 py-7 text-right font-bold tabular-nums text-slate-400">${cp.cpc.toFixed(3)}</td>
                   <td className={`px-10 py-7 text-right font-black tabular-nums text-lg ${cp.roas > 4 ? 'text-emerald-500' : 'text-blue-600'}`}>
                     {cp.roas.toFixed(2)}x
                   </td>
                 </tr>
               ))}
+              {clientCampaigns.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-10 py-32 text-center text-slate-300 italic font-medium">
+                    Aucune donnée extraite pour ce client. Lancez une extraction depuis le centre d'administration.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -197,7 +206,7 @@ const KPIBox = ({ label, value, color, isRefreshing }: any) => {
     white: 'bg-white text-slate-900 border-slate-200'
   };
   return (
-    <div className={`p-6 rounded-3xl border transition-all hover:scale-105 ${themes[color] || themes.white} ${isRefreshing ? 'animate-pulse' : ''}`}>
+    <div className={`p-6 rounded-3xl border transition-all hover:scale-105 ${themes[color] || themes.white} ${isRefreshing ? 'animate-pulse' : ''} shadow-sm`}>
       <p className="text-[9px] font-black uppercase tracking-[0.2em] opacity-60 mb-2">{label}</p>
       <p className="text-2xl font-black tabular-nums tracking-tighter">{value}</p>
     </div>
