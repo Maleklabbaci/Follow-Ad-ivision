@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { IntegrationSecret } from '../types';
 import { DB } from '../services/db';
@@ -21,17 +20,17 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ secrets, setSecrets }) =>
   };
 
   const handleSaveAndTestAi = async () => {
-    if (!aiToken && !process.env.API_KEY) {
-      alert("Veuillez saisir une clé API pour activer l'IA.");
+    const trimmedKey = aiToken.trim();
+    if (!trimmedKey && !process.env.API_KEY) {
+      alert("Veuillez saisir une clé API valide.");
       return;
     }
 
     setIsTestingAi(true);
     try {
-      // Test de la clé saisie ou de celle par défaut
-      const isValid = await testGeminiConnection(aiToken || undefined);
+      const isValid = await testGeminiConnection(trimmedKey || undefined);
       
-      const encryptedVal = aiToken ? `enc:${btoa(aiToken)}` : 'managed_by_env';
+      const encryptedVal = trimmedKey ? `enc:${btoa(trimmedKey)}` : 'managed_by_env';
       
       const newSecret: IntegrationSecret = {
         type: 'AI',
@@ -49,26 +48,27 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ secrets, setSecrets }) =>
       await DB.saveSecrets(updatedSecrets);
       
       if (isValid) {
-        alert("IA ACTIVÉE : La plateforme dispose désormais d'une intelligence opérationnelle.");
+        alert("FÉLICITATIONS : L'intelligence artificielle est maintenant active sur toute votre plateforme.");
         setAiToken('');
       } else {
-        alert("ERREUR IA : La clé fournie n'est pas valide ou les services sont indisponibles.");
+        alert("ERREUR : La clé n'a pas pu être validée. Assurez-vous d'utiliser une clé API Google Gemini valide (commençant souvent par AIza...).");
       }
     } catch (err) {
-      alert("Erreur technique lors de l'activation de l'IA.");
+      alert("Erreur technique lors de la validation.");
     } finally {
       setIsTestingAi(false);
     }
   };
 
   const handleSaveAndTest = async (type: 'FACEBOOK', val: string) => {
-    if (!val) {
+    const trimmedVal = val.trim();
+    if (!trimmedVal) {
       alert("Veuillez entrer un jeton Meta.");
       return;
     }
 
     setIsTesting(true);
-    const encryptedVal = `enc:${btoa(val)}`;
+    const encryptedVal = `enc:${btoa(trimmedVal)}`;
     
     const newSecret: IntegrationSecret = { 
       type, 
@@ -84,7 +84,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ secrets, setSecrets }) =>
     setSecrets(updatedSecrets);
 
     try {
-      const res = await fetch(`https://graph.facebook.com/v19.0/me?access_token=${val}`);
+      const res = await fetch(`https://graph.facebook.com/v19.0/me?access_token=${trimmedVal}`);
       const data = await res.json();
       
       const finalStatus = data.error ? 'INVALID' : 'VALID';
@@ -102,7 +102,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ secrets, setSecrets }) =>
         alert("Succès : Connexion Meta validée.");
         setFbToken('');
       } else {
-        alert(`Échec : Jeton invalide.`);
+        alert("Échec : Jeton Meta invalide.");
       }
     } catch (err) {
       alert("Erreur réseau.");
@@ -113,15 +113,20 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ secrets, setSecrets }) =>
 
   return (
     <div className="max-w-2xl mx-auto space-y-8 animate-in fade-in duration-500">
-      <div>
-        <h2 className="text-4xl font-black text-slate-900 tracking-tight uppercase italic">Settings</h2>
-        <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">Configuration Platforme IA & Connecteurs</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-4xl font-black text-slate-900 tracking-tight uppercase italic">Settings</h2>
+          <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">Configuration Cloud & Intelligence</p>
+        </div>
+        <div className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-lg border border-emerald-100 text-[10px] font-black uppercase tracking-widest animate-pulse">
+          Cloud Active
+        </div>
       </div>
 
-      {/* IA Section - Universal AI Key */}
+      {/* IA Section - Focus on Compatibility */}
       <section className="bg-slate-900 p-10 rounded-[2.5rem] border border-white/5 shadow-2xl relative overflow-hidden group">
-        <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
-           <svg className="w-24 h-24 text-purple-400" fill="currentColor" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+        <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
+           <svg className="w-32 h-32 text-purple-400" fill="currentColor" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
         </div>
         
         <div className="relative z-10 space-y-6">
@@ -135,21 +140,33 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ secrets, setSecrets }) =>
             <StatusBadge status={getSecretStatus('AI')?.status} isDark />
           </div>
           
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Universal IA API Key</label>
+          <div className="space-y-3">
+            <div className="flex justify-between items-end px-1">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">IA API Key (Google Engine)</label>
+              <a 
+                href="https://aistudio.google.com/app/apikey" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-[9px] font-black text-purple-400 uppercase tracking-widest hover:text-purple-300 transition-colors underline"
+              >
+                Obtenir une clé gratuite ↗
+              </a>
+            </div>
             <input 
               type="password" 
-              placeholder="Saisir votre clé API IA pour activer les rapports..." 
-              className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl outline-none focus:ring-2 focus:ring-purple-500 font-mono text-sm text-purple-200" 
+              placeholder="Ex: AIzaSyB..." 
+              className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl outline-none focus:ring-2 focus:ring-purple-500 font-mono text-sm text-purple-200 placeholder:text-slate-700" 
               value={aiToken} 
               onChange={e => setAiToken(e.target.value)} 
               disabled={isTestingAi}
             />
           </div>
 
-          <p className="text-[9px] font-bold text-slate-400 leading-relaxed italic opacity-60">
-            Cette clé déverrouille l'analyse stratégique, les audits de santé créative et les recommandations business automatisées sur toute la plateforme.
-          </p>
+          <div className="p-4 bg-purple-500/5 rounded-2xl border border-purple-500/10">
+            <p className="text-[10px] font-bold text-slate-400 leading-relaxed italic">
+              Note : La plateforme utilise actuellement le moteur **Gemini** pour sa rapidité. Assurez-vous d'utiliser une clé issue de Google AI Studio. Les clés OpenAI/Claude ne sont pas compatibles avec ce module.
+            </p>
+          </div>
 
           <button 
             onClick={handleSaveAndTestAi} 
@@ -173,7 +190,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ secrets, setSecrets }) =>
           <StatusBadge status={getSecretStatus('FACEBOOK')?.status} />
         </div>
         <div className="space-y-2">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Permanent Access Token</label>
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Meta Access Token</label>
           <input 
             type="password" 
             placeholder="EAAB..." 

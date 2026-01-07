@@ -3,12 +3,16 @@ import { CampaignStats } from "../types";
 
 /**
  * Service d'analyse IA pour les campagnes Meta Ads.
- * @param campaigns Données des campagnes à analyser
- * @param apiKey Clé API optionnelle (si non fournie, utilise process.env.API_KEY)
  */
 export const getCampaignInsights = async (campaigns: CampaignStats[], apiKey?: string): Promise<string> => {
-  // Détermination de la clé à utiliser : priorité à la clé saisie manuellement
-  const finalKey = (apiKey && apiKey !== 'managed_by_env') ? apiKey : process.env.API_KEY;
+  // On nettoie la clé pour éviter les erreurs de copier-coller
+  const cleanedKey = apiKey?.trim();
+  const finalKey = (cleanedKey && cleanedKey !== 'managed_by_env') ? cleanedKey : process.env.API_KEY;
+  
+  if (!finalKey) {
+    throw new Error("Clé API IA manquante. Veuillez la configurer dans les réglages.");
+  }
+
   const ai = new GoogleGenAI({ apiKey: finalKey });
   
   const campaignDataSummary = campaigns.map(c => 
@@ -18,52 +22,57 @@ export const getCampaignInsights = async (campaigns: CampaignStats[], apiKey?: s
   const prompt = `
     DÉPÊCHE AUDIT : ANALYSE DES FLUX DE MESSAGERIE
     
-    Voici les données brutes de performance (pour ton analyse interne uniquement) :
+    Voici les données brutes de performance :
     ${campaignDataSummary}
 
     MISSION :
-    Tu es un consultant expert en stratégie Meta Ads spécialisé dans les tunnels de messagerie. 
-    Analyse ces données mais NE CITE ABSOLUMENT AUCUN CHIFFRE, AUCUN POURCENTAGE, AUCUN MONTANT dans ton rapport final.
-    Parle en termes de "vitesse", de "fatigue", de "résonance" ou de "coût de l'attention".
+    Tu es un consultant expert en stratégie Meta Ads. Analyse ces données. 
+    NE CITE AUCUN CHIFFRE, AUCUN POURCENTAGE dans ton rapport. 
+    Parle en termes de vitalité, de résonance créative et de points de friction.
 
-    STRUCTURE DU RAPPORT (Markdown) :
-    1. VITALITÉ DU COMPTE : Le flux global est-il sain, stagnant ou en surchauffe ?
-    2. LE LEVIER GAGNANT : Quelle approche ou angle créatif semble avoir la meilleure résonance actuellement ?
-    3. LE POINT DE FRICTION : Où se situe le blocage (Coût de l'attention trop haut, créas qui lassent, ou offre qui ne convertit pas) ?
-    4. SANTÉ CRÉATIVE : Est-ce le moment de renouveler les visuels ou le message ? 
-    5. PLAN D'ACTION IMMÉDIAT : La seule chose à changer demain matin pour booster les conversations.
-
-    TON : Complice, direct, expert et minimaliste.
+    STRUCTURE :
+    1. VITALITÉ : Flux global.
+    2. LEVIER : Ce qui fonctionne.
+    3. FRICTION : Le blocage actuel.
+    4. ACTION : La chose à changer demain.
   `;
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview',
+      model: 'gemini-3-flash-preview', // Utilisation d'un modèle ultra-rapide et compatible
       contents: prompt,
       config: {
-        systemInstruction: "Tu es un Growth Coach pour agences média. Ta spécialité est de traduire les métriques complexes (CPM, CTR, CPA) en instincts business. Tu ne parles jamais de chiffres bruts, uniquement de tendances de santé créative et d'opportunités de croissance."
+        systemInstruction: "Tu es un Growth Coach. Traduis les stats en instincts business sans jamais citer de chiffres."
       }
     });
 
     return response.text || "Le diagnostic IA est momentanément indisponible.";
-  } catch (error) {
-    console.error("Gemini AI Insight Error:", error);
+  } catch (error: any) {
+    console.error("Gemini AI Error:", error);
+    if (error.message?.includes('API key not valid')) {
+      throw new Error("La clé API fournie n'est pas valide pour ce moteur IA.");
+    }
     throw error;
   }
 };
 
 /**
- * Teste la connectivité avec l'API AI (Gemini).
- * @param apiKey Clé à tester
+ * Teste la connectivité avec l'API IA.
  */
 export const testGeminiConnection = async (apiKey?: string): Promise<boolean> => {
+  const cleanedKey = apiKey?.trim();
+  if (!cleanedKey && !process.env.API_KEY) return false;
+
   try {
-    const finalKey = (apiKey && apiKey !== 'managed_by_env') ? apiKey : process.env.API_KEY;
-    const ai = new GoogleGenAI({ apiKey: finalKey });
+    const finalKey = (cleanedKey && cleanedKey !== 'managed_by_env') ? cleanedKey : process.env.API_KEY;
+    const ai = new GoogleGenAI({ apiKey: finalKey! });
+    
+    // Test minimaliste pour valider la clé
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: 'Ping',
+      contents: 'Bonjour, réponds juste par "OK"',
     });
+    
     return !!response.text;
   } catch (error) {
     console.error("AI connection test failed:", error);
