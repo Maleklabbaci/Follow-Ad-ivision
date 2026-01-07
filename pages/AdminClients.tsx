@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Client, AdAccount, IntegrationSecret, FacebookCampaign } from '../types';
 import { decryptSecret } from '../services/cryptoService';
@@ -34,7 +34,6 @@ const AdminClients: React.FC<AdminClientsProps> = ({ clients, setClients, secret
   const [newClientEmail, setNewClientEmail] = useState('');
 
   // Linking Modal State
-  const [modalStep, setModalStep] = useState<'ACCOUNTS' | 'CAMPAIGNS'>('ACCOUNTS');
   const [linkingClient, setLinkingClient] = useState<Client | null>(null);
   const [availableAccounts, setAvailableAccounts] = useState<AdAccount[]>([]);
   const [availableCampaigns, setAvailableCampaigns] = useState<FacebookCampaign[]>([]);
@@ -42,7 +41,8 @@ const AdminClients: React.FC<AdminClientsProps> = ({ clients, setClients, secret
   const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
   const [selectedCampaignIds, setSelectedCampaignIds] = useState<string[]>([]);
   
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingAccounts, setIsLoadingAccounts] = useState(false);
+  const [isLoadingCampaigns, setIsLoadingCampaigns] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleAdd = (e: React.FormEvent) => {
@@ -81,10 +81,9 @@ const AdminClients: React.FC<AdminClientsProps> = ({ clients, setClients, secret
     }
 
     setLinkingClient(client);
-    setModalStep('ACCOUNTS');
     setSelectedAccountIds(client.adAccounts || []);
     setSelectedCampaignIds(client.campaignIds || []);
-    setIsLoading(true);
+    setIsLoadingAccounts(true);
     setError(null);
     setAvailableAccounts([]);
     setAvailableCampaigns([]);
@@ -108,25 +107,25 @@ const AdminClients: React.FC<AdminClientsProps> = ({ clients, setClients, secret
       setAvailableAccounts(MOCK_FALLBACK_ACCOUNTS);
       setError("Note: Live connection failed (CORS or Invalid Token). Showing demo accounts.");
     } finally {
-      setIsLoading(false);
+      setIsLoadingAccounts(false);
     }
   };
 
-  const fetchCampaigns = async () => {
-    if (selectedAccountIds.length === 0) {
-      alert("Please select at least one ad account first.");
+  // AUTOMATIC CAMPAIGN FETCHING
+  const fetchCampaigns = useCallback(async (accountIds: string[]) => {
+    if (accountIds.length === 0) {
+      setAvailableCampaigns([]);
       return;
     }
 
-    setIsLoading(true);
-    setAvailableCampaigns([]);
+    setIsLoadingCampaigns(true);
     const fbSecret = secrets.find(s => s.type === 'FACEBOOK');
     
     try {
       const token = await decryptSecret(fbSecret!.value);
       let allCampaigns: FacebookCampaign[] = [];
 
-      for (const accId of selectedAccountIds) {
+      for (const accId of accountIds) {
         try {
           const response = await fetch(`https://graph.facebook.com/v19.0/${accId}/campaigns?fields=name,status,id,account_id&access_token=${token}`);
           const data = await response.json();
@@ -140,19 +139,24 @@ const AdminClients: React.FC<AdminClientsProps> = ({ clients, setClients, secret
       }
 
       setAvailableCampaigns(allCampaigns);
-      setModalStep('CAMPAIGNS');
     } catch (err) {
       console.error("Critical failure fetching campaigns", err);
       let fallbackCampaigns: FacebookCampaign[] = [];
-      selectedAccountIds.forEach(id => {
+      accountIds.forEach(id => {
         if (MOCK_FALLBACK_CAMPAIGNS[id]) fallbackCampaigns = [...fallbackCampaigns, ...MOCK_FALLBACK_CAMPAIGNS[id]];
       });
       setAvailableCampaigns(fallbackCampaigns);
-      setModalStep('CAMPAIGNS');
     } finally {
-      setIsLoading(false);
+      setIsLoadingCampaigns(false);
     }
-  };
+  }, [secrets]);
+
+  // Reactive Effect: Fetch campaigns whenever selected accounts change
+  useEffect(() => {
+    if (linkingClient) {
+      fetchCampaigns(selectedAccountIds);
+    }
+  }, [selectedAccountIds, linkingClient, fetchCampaigns]);
 
   const handleToggleAccount = (accountId: string) => {
     setSelectedAccountIds(prev => 
@@ -306,16 +310,14 @@ const AdminClients: React.FC<AdminClientsProps> = ({ clients, setClients, secret
         ))}
       </div>
 
-      {/* MULTI-STEP LINKING MODAL */}
+      {/* SINGLE-VIEW LINKING MODAL */}
       {linkingClient && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0">
+          <div className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col h-[85vh]">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white shrink-0">
               <div>
-                <h3 className="text-xl font-bold text-slate-900">
-                  {modalStep === 'ACCOUNTS' ? 'Step 1: Select Ad Accounts' : 'Step 2: Link Specific Campaigns'}
-                </h3>
-                <p className="text-sm text-slate-500">Managing access for {linkingClient.name}</p>
+                <h3 className="text-xl font-bold text-slate-900">Configure Marketing Assets</h3>
+                <p className="text-sm text-slate-500">Select accounts and specific campaigns for {linkingClient.name}</p>
               </div>
               <button 
                 onClick={() => setLinkingClient(null)}
@@ -327,113 +329,123 @@ const AdminClients: React.FC<AdminClientsProps> = ({ clients, setClients, secret
               </button>
             </div>
 
-            <div className="p-6 max-h-[60vh] overflow-y-auto bg-slate-50/50">
-              {error && (
-                <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800 flex gap-3">
-                  <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-                  {error}
-                </div>
-              )}
-
-              {isLoading ? (
-                <div className="flex flex-col items-center justify-center py-12 space-y-4">
-                  <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                  <p className="text-slate-500 font-medium">Communicating with Meta Graph API...</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {modalStep === 'ACCOUNTS' ? (
+            <div className="flex-1 overflow-hidden flex bg-slate-50/50">
+              {/* LEFT COLUMN: ACCOUNTS */}
+              <div className="w-1/3 border-r border-slate-200 flex flex-col p-6 overflow-hidden">
+                <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Ad Accounts</h4>
+                <div className="flex-1 overflow-y-auto space-y-3 pr-2">
+                  {isLoadingAccounts ? (
+                    <div className="py-12 text-center text-slate-400">
+                      <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                      <p className="text-xs">Loading accounts...</p>
+                    </div>
+                  ) : (
                     availableAccounts.map(account => {
                       const isSelected = selectedAccountIds.includes(account.id);
                       return (
                         <div 
                           key={account.id}
                           onClick={() => handleToggleAccount(account.id)}
-                          className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center justify-between ${
-                            isSelected ? 'border-blue-600 bg-blue-50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'
+                          className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${
+                            isSelected ? 'border-blue-600 bg-blue-50' : 'border-slate-200 bg-white hover:border-slate-300'
                           }`}
                         >
-                          <div className="flex items-center gap-3">
-                            <div className={`w-5 h-5 rounded border flex items-center justify-center ${isSelected ? 'bg-blue-600 border-blue-600' : 'bg-white border-slate-300'}`}>
-                              {isSelected && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
-                            </div>
-                            <div>
-                              <p className={`font-semibold ${isSelected ? 'text-blue-900' : 'text-slate-900'}`}>{account.name}</p>
-                              <p className="text-xs text-slate-500">{account.id}</p>
-                            </div>
+                          <div className={`w-4 h-4 rounded border shrink-0 flex items-center justify-center ${isSelected ? 'bg-blue-600 border-blue-600' : 'bg-white border-slate-300'}`}>
+                            {isSelected && <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
                           </div>
-                          <span className="text-xs font-bold text-slate-400">{account.currency}</span>
+                          <div className="min-w-0">
+                            <p className={`text-sm font-bold truncate ${isSelected ? 'text-blue-900' : 'text-slate-900'}`}>{account.name}</p>
+                            <p className="text-[10px] text-slate-400 truncate">{account.id}</p>
+                          </div>
                         </div>
                       );
                     })
-                  ) : (
-                    availableCampaigns.length > 0 ? (
-                      availableCampaigns.map(cp => {
-                        const isSelected = selectedCampaignIds.includes(cp.id);
-                        return (
-                          <div 
-                            key={cp.id}
-                            onClick={() => handleToggleCampaign(cp.id)}
-                            className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center justify-between ${
-                              isSelected ? 'border-emerald-600 bg-emerald-50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'
-                            }`}
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className={`w-5 h-5 rounded border flex items-center justify-center ${isSelected ? 'bg-emerald-600 border-emerald-600' : 'bg-white border-slate-300'}`}>
-                                {isSelected && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
-                              </div>
-                              <div>
-                                <p className={`font-semibold ${isSelected ? 'text-emerald-900' : 'text-slate-900'}`}>{cp.name}</p>
-                                <p className="text-xs text-slate-500">{cp.status} • {cp.account_id}</p>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <div className="text-center py-8 text-slate-500">No campaigns found for selected accounts.</div>
-                    )
                   )}
                 </div>
-              )}
+              </div>
+
+              {/* RIGHT COLUMN: CAMPAIGNS */}
+              <div className="flex-1 flex flex-col p-6 overflow-hidden">
+                <div className="flex justify-between items-center mb-4">
+                  <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest">Available Campaigns</h4>
+                  {isLoadingCampaigns && (
+                    <div className="flex items-center gap-2 text-[10px] text-blue-600 font-bold uppercase tracking-tighter">
+                      <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                      Fetching...
+                    </div>
+                  )}
+                </div>
+                
+                <div className="flex-1 overflow-y-auto space-y-2 pr-2">
+                  {error && (
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 mb-4">
+                      {error}
+                    </div>
+                  )}
+
+                  {selectedAccountIds.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center text-slate-400 space-y-3">
+                      <svg className="w-12 h-12 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                      <p className="text-sm font-medium">Select an account to view campaigns</p>
+                    </div>
+                  ) : availableCampaigns.length === 0 && !isLoadingCampaigns ? (
+                    <div className="h-full flex items-center justify-center text-slate-400 italic text-sm">
+                      No campaigns found for selected accounts.
+                    </div>
+                  ) : (
+                    availableCampaigns.map(cp => {
+                      const isSelected = selectedCampaignIds.includes(cp.id);
+                      return (
+                        <div 
+                          key={cp.id}
+                          onClick={() => handleToggleCampaign(cp.id)}
+                          className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex items-center justify-between ${
+                            isSelected ? 'border-emerald-600 bg-emerald-50' : 'border-slate-200 bg-white hover:border-slate-300'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className={`w-4 h-4 rounded border shrink-0 flex items-center justify-center ${isSelected ? 'bg-emerald-600 border-emerald-600' : 'bg-white border-slate-300'}`}>
+                              {isSelected && <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                            </div>
+                            <div className="min-w-0">
+                              <p className={`text-sm font-bold truncate ${isSelected ? 'text-emerald-900' : 'text-slate-900'}`}>{cp.name}</p>
+                              <p className="text-[10px] text-slate-500 uppercase tracking-tighter">{cp.status} • {cp.id}</p>
+                            </div>
+                          </div>
+                          <span className="text-[9px] font-black text-slate-400 uppercase bg-slate-100 px-1.5 py-0.5 rounded">
+                            {cp.account_id.slice(-4)}
+                          </span>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
             </div>
 
-            <div className="p-6 border-t border-slate-100 flex justify-between bg-white">
-              {modalStep === 'CAMPAIGNS' ? (
-                <button
-                  onClick={() => setModalStep('ACCOUNTS')}
-                  className="px-6 py-2.5 text-slate-600 font-semibold hover:bg-slate-50 rounded-xl transition-colors"
-                >
-                  Back to Accounts
-                </button>
-              ) : (
+            <div className="p-6 border-t border-slate-100 flex justify-between bg-white shrink-0">
+              <div className="flex items-center gap-4 text-xs font-bold text-slate-400">
+                <div className="flex items-center gap-1">
+                  <span className="text-blue-600">{selectedAccountIds.length}</span> Accounts
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-emerald-600">{selectedCampaignIds.length}</span> Campaigns
+                </div>
+              </div>
+              <div className="flex gap-3">
                 <button
                   onClick={() => setLinkingClient(null)}
-                  className="px-6 py-2.5 text-slate-600 font-semibold hover:bg-slate-50 rounded-xl transition-colors"
+                  className="px-6 py-2.5 text-slate-600 font-bold hover:bg-slate-50 rounded-xl transition-colors"
                 >
-                  Cancel
+                  Discard
                 </button>
-              )}
-              
-              {modalStep === 'ACCOUNTS' ? (
-                <button
-                  onClick={fetchCampaigns}
-                  disabled={isLoading || selectedAccountIds.length === 0}
-                  className="px-6 py-2.5 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200 disabled:opacity-50"
-                >
-                  Next: Pick Campaigns
-                </button>
-              ) : (
                 <button
                   onClick={saveLinking}
-                  disabled={isLoading}
-                  className="px-6 py-2.5 bg-emerald-600 text-white font-semibold rounded-xl hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-200 disabled:opacity-50"
+                  className="px-8 py-2.5 bg-slate-900 text-white font-black rounded-xl hover:bg-black transition-all shadow-lg shadow-slate-200 uppercase tracking-widest text-xs"
                 >
-                  Finish & Save
+                  Save Configuration
                 </button>
-              )}
+              </div>
             </div>
           </div>
         </div>
