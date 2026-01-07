@@ -1,43 +1,53 @@
-
 import { GoogleGenAI } from "@google/genai";
 import { CampaignStats } from "../types";
 
+/**
+ * Service d'analyse IA pour les campagnes Meta Ads.
+ * Utilise Gemini 3 Pro pour transformer les données brutes en conseils stratégiques.
+ */
 export const getCampaignInsights = async (campaigns: CampaignStats[]): Promise<string> => {
+  // Initialisation à chaque appel pour garantir l'utilisation de la clé API la plus récente (process.env.API_KEY)
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
+  // Préparation du contexte de données pour le modèle
   const campaignDataSummary = campaigns.map(c => 
-    `- Nom: ${c.name}, ROAS: ${c.roas.toFixed(2)}, CTR: ${(c.ctr * 100).toFixed(2)}%, Conv. Démarrées: ${c.conversations_started}, CPA Conv: ${c.cpa_conversation_started.toFixed(2)}, Etat: ${c.status}`
+    `- Nom: ${c.name}, Spend: ${c.spend}, CPM: ${c.cpm.toFixed(2)}, CTR: ${(c.ctr * 100).toFixed(2)}%, Conv. Démarrées: ${c.conversations_started}, CPA Started: ${c.cpa_conversation_started.toFixed(2)}, Etat: ${c.status}`
   ).join('\n');
 
   const prompt = `
-    Tu es un consultant expert en stratégie Meta Ads. Analyse ces données de campagnes mais NE CITE AUCUN CHIFFRE, AUCUN POURCENTAGE, AUCUN MONTANT dans ton rapport final.
+    DÉPÊCHE AUDIT : ANALYSE DES FLUX DE MESSAGERIE
     
-    Données de contexte (pour ton analyse uniquement) :
+    Voici les données brutes de performance (pour ton analyse interne uniquement) :
     ${campaignDataSummary}
 
-    Produis un audit "SENTIMENT & SANTÉ" très concis structuré comme suit :
-    1. L'ÉTAT D'ESPRIT : Globalement, est-ce que le compte respire la santé ou est-ce qu'il est en apnée ?
-    2. LE TOP : Ce qui fonctionne vraiment bien en termes de message ou d'approche (ex: "L'approche directe vers la messagerie cartonne").
-    3. LE FLOP : Ce qui commence à fatiguer ou qui ne résonne pas (ex: "Ton offre actuelle semble ignorée").
-    4. SANTÉ CRÉATIVE : Est-ce que les photos/vidéos sont "mortes" (fatigue publicitaire) ou encore fraîches ? 
-    5. LE CONSEIL : Une seule action concrète à faire demain matin pour améliorer le volume de conversations.
+    MISSION :
+    Tu es un consultant expert en stratégie Meta Ads spécialisé dans les tunnels de messagerie. 
+    Analyse ces données mais NE CITE ABSOLUMENT AUCUN CHIFFRE, AUCUN POURCENTAGE, AUCUN MONTANT dans ton rapport final.
+    Parle en termes de "vitesse", de "fatigue", de "résonance" ou de "coût de l'attention".
 
-    Ton ton doit être complice, direct et élégant. Utilise des puces (•).
-    Format Markdown simple. Pas de tableaux.
+    STRUCTURE DU RAPPORT (Markdown) :
+    1. VITALITÉ DU COMPTE : Le flux global est-il sain, stagnant ou en surchauffe ?
+    2. LE LEVIER GAGNANT : Quelle approche ou angle créatif semble avoir la meilleure résonance actuellement ?
+    3. LE POINT DE FRICTION : Où se situe le blocage (Coût de l'attention trop haut, créas qui lassent, ou offre qui ne convertit pas) ?
+    4. SANTÉ CRÉATIVE : Est-ce le moment de renouveler les visuels ou le message ? 
+    5. PLAN D'ACTION IMMÉDIAT : La seule chose à changer demain matin pour booster les conversations.
+
+    TON : Complice, direct, expert et minimaliste.
   `;
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3-pro-preview', // Passage au modèle Pro pour une meilleure analyse stratégique
       contents: prompt,
       config: {
-        systemInstruction: "Tu es un coach de croissance. Tu simplifies la donnée complexe en conseils humains et instinctifs. Tu ne parles jamais de chiffres bruts, uniquement de tendances et de santé créative."
+        systemInstruction: "Tu es un Growth Coach pour agences média. Ta spécialité est de traduire les métriques complexes (CPM, CTR, CPA) en instincts business. Tu ne parles jamais de chiffres bruts, uniquement de tendances de santé créative et d'opportunités de croissance."
       }
     });
 
-    return response.text || "L'IA n'a pas pu analyser les données pour le moment.";
+    // Utilisation de la propriété .text pour extraire le contenu généré
+    return response.text || "Le diagnostic IA est momentanément indisponible.";
   } catch (error) {
-    console.error("AI Insight Error:", error);
+    console.error("Gemini AI Insight Error:", error);
     throw error;
   }
 };
