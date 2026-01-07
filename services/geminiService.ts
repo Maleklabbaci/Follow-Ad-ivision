@@ -1,97 +1,131 @@
+
 import { GoogleGenAI } from "@google/genai";
 import { CampaignStats } from "../types";
 
 /**
- * Service d'analyse IA pour les campagnes Meta Ads.
+ * Service d'intelligence artificielle multi-modulaire pour ADiVISION.
+ * Centralise toutes les interactions avec Gemini 3.
  */
-export const getCampaignInsights = async (campaigns: CampaignStats[], apiKey?: string): Promise<string> => {
-  const cleanedKey = apiKey?.trim();
-  const finalKey = (cleanedKey && cleanedKey !== 'managed_by_env') ? cleanedKey : process.env.API_KEY;
-  
-  if (!finalKey) {
-    throw new Error("Clé API IA manquante. Veuillez la configurer dans les réglages.");
-  }
-
-  const ai = new GoogleGenAI({ apiKey: finalKey });
-  
-  if (!campaigns || campaigns.length === 0) {
-    throw new Error("Aucune donnée de campagne à analyser.");
-  }
-
-  const campaignDataSummary = campaigns.map(c => 
-    `- Nom: ${c.name || 'Inconnu'}, Spend: ${Number(c.spend || 0).toFixed(2)}, CPM: ${Number(c.cpm || 0).toFixed(2)}, CTR: ${(Number(c.ctr || 0) * 100).toFixed(2)}%, Conv. Démarrées: ${c.conversations_started || 0}, CPA: ${Number(c.cpa_conversation_started || 0).toFixed(2)}, Etat: ${c.status || 'N/A'}`
-  ).join('\n');
-
-  const prompt = `
-    DÉPÊCHE AUDIT : ANALYSE DES FLUX DE MESSAGERIE
-    
-    Voici les données brutes de performance :
-    ${campaignDataSummary}
-
-    MISSION :
-    Tu es un consultant expert en stratégie Meta Ads. Analyse ces données. 
-    NE CITE AUCUN CHIFFRE, AUCUN POURCENTAGE dans ton rapport. 
-    Parle en termes de vitalité, de résonance créative et de points de friction.
-
-    STRUCTURE :
-    1. VITALITÉ : Flux global.
-    2. LEVIER : Ce qui fonctionne.
-    3. FRICTION : Le blocage actuel.
-    4. ACTION : La chose à changer demain.
-  `;
-
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: [{ parts: [{ text: prompt }] }],
-      config: {
-        systemInstruction: "Tu es un Growth Coach senior. Ton rôle est de transformer des chiffres froids en instincts business et actions concrètes sans jamais mentionner les valeurs numériques."
-      }
-    });
-
-    if (!response.text) {
-      throw new Error("L'IA n'a pas retourné de texte. Vérifiez votre crédit ou les limites du modèle.");
-    }
-
-    return response.text;
-  } catch (error: any) {
-    console.error("Gemini AI error details:", error);
-    
-    // Extraction des erreurs communes
-    const msg = error.message || "";
-    if (msg.includes('403') || msg.includes('API key not valid')) {
-      throw new Error("Clé API invalide ou accès refusé. Vérifiez vos permissions Google Cloud.");
-    }
-    if (msg.includes('429')) {
-      throw new Error("Quota atteint (429). Réessayez dans une minute.");
-    }
-    if (msg.includes('500')) {
-      throw new Error("Le serveur IA rencontre une erreur temporaire (500).");
-    }
-    
-    throw new Error(error.message || "Erreur de connexion aux services d'intelligence.");
-  }
+// FIX: The SDK guidelines mandate obtaining the API key exclusively from process.env.API_KEY.
+export const getGeminiClient = () => {
+  if (!process.env.API_KEY) throw new Error("Clé API IA manquante.");
+  return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
 
 /**
- * Teste la connectivité avec l'API IA.
+ * Audit stratégique : Analyse profonde des performances actuelles.
  */
-export const testGeminiConnection = async (apiKey?: string): Promise<boolean> => {
-  const cleanedKey = apiKey?.trim();
-  if (!cleanedKey && !process.env.API_KEY) return false;
+export const getCampaignInsights = async (
+  campaigns: CampaignStats[], 
+  lang: 'fr' | 'en' | 'ar' = 'fr'
+): Promise<string> => {
+  const ai = getGeminiClient();
+  const dataSummary = campaigns.map(c => 
+    `- Campagne: ${c.name}, Dépense: ${c.spend}, Conversions: ${c.conversions}, Statut: ${c.status}, CTR: ${(c.ctr * 100).toFixed(2)}%`
+  ).join('\n');
 
+  const systemInstructions = {
+    fr: `Tu es un Expert en Croissance (Growth Strategist) de classe mondiale. Fournis un audit ultra-structuré : 1. Bilan 2. Accélérateurs 3. Fuites 4. Action 24h.`,
+    en: `You are a world-class Growth Strategist. Provide a highly structured audit: 1. Health 2. Accelerators 3. Leaks 4. 24h Action.`,
+    ar: `أنت خبير استراتيجي عالمي في النمو. قدم تدقيقًا عالي التنظيم: 1. الصحة 2. المسرعات 3. التسريبات 4. خطة عمل.`
+  };
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: [{ parts: [{ text: `Données: ${dataSummary}\nEffectue un audit global.` }] }],
+    config: { systemInstruction: systemInstructions[lang] }
+  });
+  return response.text || "Erreur de génération.";
+};
+
+/**
+ * Chatbot d'onboarding, de vente et support.
+ * Explique la valeur ajoutée d'ADiVISION vs la concurrence.
+ */
+export const getChatbotResponse = async (
+  message: string, 
+  history: {role: string, content: string}[]
+): Promise<string> => {
+  const ai = getGeminiClient();
+  const systemPrompt = `Tu es VisionBot, l'assistant intelligent d'ADiVISION AI. 
+  Ta mission : Expliquer comment ADiVISION aide les agences à scaler leurs Meta Ads.
+  
+  POURQUOI NOUS (LA VALEUR) :
+  1. Transparence : Extraction directe API Meta, zéro saisie manuelle.
+  2. Vitesse : Audits IA instantanés là où une agence met 4h.
+  3. Précision : CPA calculé au centime près, pas d'estimations vagues.
+  4. Accessibilité : Dashboard client ultra-pro inclus.
+  
+  NOTRE DIFFÉRENCE : On n'est pas juste un dashboard, on est un "Growth Engine" qui réfléchit.
+  
+  TON : Dynamique, professionnel, un peu tech-savvy, utilise des emojis. Max 2-3 phrases par réponse.`;
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: [
+      ...history.map(h => ({ role: h.role === 'user' ? 'user' : 'model', parts: [{ text: h.content }] })),
+      { role: 'user', parts: [{ text: message }] }
+    ],
+    config: { systemInstruction: systemPrompt }
+  });
+  return response.text || "Je suis à votre service pour booster vos campagnes !";
+};
+
+/**
+ * IA de Prédiction Budgétaire : Analyse les tendances pour prévoir le futur.
+ */
+export const getBudgetForecast = async (campaigns: CampaignStats[]): Promise<string> => {
+  const ai = getGeminiClient();
+  const data = campaigns.map(c => `${c.name}: Spend ${c.spend}, Conv ${c.conversions}`).join('\n');
+  const prompt = `Données :\n${data}\nPrédis les performances du mois prochain (Spend +20%). Donne 3 KPIs et 1 conseil phare.`;
+  
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: [{ parts: [{ text: prompt }] }],
+  });
+  return response.text || "Prédiction indisponible.";
+};
+
+/**
+ * IA Copywriting Assistant : Génère des accroches publicitaires basées sur les performances.
+ */
+export const getCopywritingSuggestions = async (campaigns: CampaignStats[]): Promise<string> => {
+  const ai = getGeminiClient();
+  const bestCampaigns = campaigns.filter(c => c.conversions > 0).sort((a, b) => (b.conversions / b.spend) - (a.conversions / a.spend));
+  const context = bestCampaigns.map(c => `- ${c.name}`).join('\n');
+  
+  const prompt = `Basé sur ces noms de campagnes performantes :\n${context}\nGénère 3 accroches publicitaires "Hook" irrésistibles et 2 descriptions pour Meta Ads. Style: Direct, bénéfice client, urgent.`;
+  
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: [{ parts: [{ text: prompt }] }],
+  });
+  return response.text || "Suggestions indisponibles.";
+};
+
+/**
+ * Détecteur d'Anomalies : Identifie les comportements suspects de l'algorithme Meta.
+ */
+export const getAnomalyDetection = async (campaigns: CampaignStats[]): Promise<string> => {
+  const ai = getGeminiClient();
+  const data = campaigns.map(c => `${c.name}: Spend ${c.spend}, CTR ${(c.ctr*100).toFixed(2)}%, Conv ${c.conversions}`).join('\n');
+  
+  const prompt = `Analyse ces données pour détecter des anomalies :\n${data}\nCherche : Spend élevé sans conversions, CTR anormalement bas, ou campagnes "mortes" qui consomment du budget. Liste max 3 alertes critiques.`;
+  
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: [{ parts: [{ text: prompt }] }],
+  });
+  return response.text || "Aucune anomalie détectée.";
+};
+
+export const testGeminiConnection = async (): Promise<boolean> => {
   try {
-    const finalKey = (cleanedKey && cleanedKey !== 'managed_by_env') ? cleanedKey : process.env.API_KEY;
-    const ai = new GoogleGenAI({ apiKey: finalKey! });
-    
+    const ai = getGeminiClient();
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: [{ parts: [{ text: 'Ping' }] }],
     });
-    
     return !!response.text;
-  } catch (error) {
-    console.error("AI connection test failed:", error);
-    return false;
-  }
+  } catch { return false; }
 };

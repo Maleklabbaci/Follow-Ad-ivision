@@ -11,7 +11,7 @@ export interface User {
   clientId?: string;
   name: string;
   password?: string;
-  password_hash?: string; // Ajouté pour compatibilité DB directe
+  password_hash?: string;
 }
 
 export interface AuditLog {
@@ -82,12 +82,12 @@ export interface CampaignStats {
   reach: number;
   frequency: number;
   clicks: number;
-  conversations_started: number; // Remplace conversions
+  conversions: number; // Simplifié
   conversion_action_type: string; 
   ctr: number;
   cpc: number;
   cpm: number;
-  cpa_conversation_started: number; // Remplace cpa
+  cpa: number; // Simplifié
   roas: number;
   status: 'ACTIVE' | 'PAUSED' | 'ARCHIVED';
   lastSync?: string;

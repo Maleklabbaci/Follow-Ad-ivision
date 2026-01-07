@@ -71,7 +71,7 @@ const App: React.FC = () => {
       <div className="h-screen flex items-center justify-center bg-slate-900 text-white flex-col gap-4">
         <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
         <div className="text-center">
-          <p className="font-black text-xl tracking-tighter uppercase italic">AdPulse Engine</p>
+          <p className="font-black text-xl tracking-tighter uppercase italic">ADiVISION Engine</p>
           <p className="text-[10px] text-slate-400 uppercase tracking-widest mt-2 animate-pulse">Syncing Data...</p>
         </div>
       </div>
