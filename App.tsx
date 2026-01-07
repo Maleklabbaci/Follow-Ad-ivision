@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { User, UserRole, Client, CampaignStats, IntegrationSecret } from './types';
 import Layout from './components/Layout';
@@ -53,11 +53,11 @@ const App: React.FC = () => {
     } catch { return []; }
   });
 
-  const sanitizeCampaign = useCallback((cp: Partial<CampaignStats>): CampaignStats => {
-    const spend = Math.max(0, Number(cp.spend) || 0);
-    const clicks = Math.max(0, Math.floor(Number(cp.clicks) || 0));
-    const conv = Math.max(0, Math.floor(Number(cp.conversions) || 0));
-    const imps = Math.max(0, Math.floor(Number(cp.impressions) || 0));
+  const sanitizeCampaign = useCallback((cp: any): CampaignStats => {
+    const spend = Math.max(0, parseFloat(cp.spend) || 0);
+    const clicks = Math.max(0, parseInt(cp.clicks) || 0);
+    const conv = Math.max(0, parseInt(cp.conversions) || 0);
+    const imps = Math.max(0, parseInt(cp.impressions) || 0);
     const AOV = 145.00; 
 
     return {
@@ -65,12 +65,12 @@ const App: React.FC = () => {
       campaignId: cp.campaignId || 'unassigned',
       name: cp.name || 'Untitled Campaign',
       date: cp.date || new Date().toISOString(),
-      spend,
-      clicks,
+      spend: spend,
+      clicks: clicks,
       conversions: conv,
       impressions: imps,
-      ctr: imps > 0 ? clicks / imps : 0,
-      cpc: clicks > 0 ? spend / clicks : 0,
+      ctr: imps > 0 ? (clicks / imps) : 0,
+      cpc: clicks > 0 ? (spend / clicks) : 0,
       roas: spend > 0 ? (conv * AOV) / spend : 0,
       lastSync: cp.lastSync || new Date().toISOString(),
       isValidated: !!cp.isValidated,
@@ -80,18 +80,17 @@ const App: React.FC = () => {
     };
   }, []);
 
-  // Ensure all campaigns are sanitized on load and when state changes
+  // Sync / Heal campaigns data on load
   useEffect(() => {
-    const isDirty = campaigns.some(c => !c.id || typeof c.spend !== 'number');
-    if (isDirty) {
+    const needsHeal = campaigns.some(c => typeof c.spend === 'string' || isNaN(c.spend));
+    if (needsHeal) {
       setCampaigns(prev => prev.map(sanitizeCampaign));
     }
-  }, [campaigns, sanitizeCampaign]);
+  }, [campaigns.length, sanitizeCampaign]);
 
-  // AUTO-PROVISIONING logic - stabilized to prevent infinite loops
+  // AUTO-PROVISIONING with forced numbers
   useEffect(() => {
     if (clients.length === 0) return;
-    
     const assignedIds = new Set(clients.flatMap(c => c.campaignIds || []));
     const existingIds = new Set(campaigns.map(c => c.campaignId));
     const missingIds = Array.from(assignedIds).filter(id => !existingIds.has(id));
@@ -103,11 +102,11 @@ const App: React.FC = () => {
           return sanitizeCampaign({
             campaignId: id,
             name: `Campaign ${id} (${owner?.name || 'New'})`,
-            spend: 150 + Math.random() * 300,
-            impressions: 12000 + Math.floor(Math.random() * 8000),
-            clicks: 250 + Math.floor(Math.random() * 400),
-            conversions: 12 + Math.floor(Math.random() * 25),
-            auditLogs: [`Auto-provisioned for client: ${owner?.name || 'System'}`]
+            spend: 500 + Math.random() * 1000, // Budget garanti
+            impressions: 25000 + Math.floor(Math.random() * 10000),
+            clicks: 500 + Math.floor(Math.random() * 500),
+            conversions: 45 + Math.floor(Math.random() * 30),
+            auditLogs: [`Auto-provisioned data generated for ${owner?.name || 'Client'}`]
           });
         });
         return [...prev, ...newEntries];
@@ -115,7 +114,6 @@ const App: React.FC = () => {
     }
   }, [clients, campaigns.length, sanitizeCampaign]);
 
-  // Persistance
   useEffect(() => { localStorage.setItem('app_clients', JSON.stringify(clients)); }, [clients]);
   useEffect(() => { localStorage.setItem('app_secrets', JSON.stringify(secrets)); }, [secrets]);
   useEffect(() => { localStorage.setItem('app_campaigns', JSON.stringify(campaigns)); }, [campaigns]);
