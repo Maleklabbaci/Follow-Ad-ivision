@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { IntegrationSecret } from '../types';
 import { DB } from '../services/db';
+import { testGeminiConnection } from '../services/geminiService';
 
 interface AdminSettingsProps {
   secrets: IntegrationSecret[];
@@ -11,9 +12,41 @@ interface AdminSettingsProps {
 const AdminSettings: React.FC<AdminSettingsProps> = ({ secrets, setSecrets }) => {
   const [fbToken, setFbToken] = useState('');
   const [isTesting, setIsTesting] = useState(false);
+  const [isTestingAi, setIsTestingAi] = useState(false);
 
-  const getSecretStatus = (type: 'FACEBOOK') => {
+  const getSecretStatus = (type: 'FACEBOOK' | 'AI') => {
     return secrets.find(s => s.type === type);
+  };
+
+  const handleTestAi = async () => {
+    setIsTestingAi(true);
+    try {
+      const isValid = await testGeminiConnection();
+      const newSecret: IntegrationSecret = {
+        type: 'AI',
+        value: 'managed_by_env',
+        updatedAt: new Date().toISOString(),
+        status: isValid ? 'VALID' : 'INVALID'
+      };
+
+      const updatedSecrets = [
+        ...secrets.filter(s => s.type !== 'AI'),
+        newSecret
+      ];
+      
+      setSecrets(updatedSecrets);
+      await DB.saveSecrets(updatedSecrets);
+      
+      if (isValid) {
+        alert("Succès : L'IA Gemini est opérationnelle sur toute la plateforme.");
+      } else {
+        alert("Échec : Impossible de contacter l'API Gemini. Vérifiez la configuration système.");
+      }
+    } catch (err) {
+      alert("Erreur lors du test de l'IA.");
+    } finally {
+      setIsTestingAi(false);
+    }
   };
 
   const handleSaveAndTest = async (type: 'FACEBOOK', val: string) => {
@@ -25,7 +58,6 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ secrets, setSecrets }) =>
     setIsTesting(true);
     const encryptedVal = `enc:${btoa(val)}`;
     
-    // 1. Préparation du nouvel état
     const newSecret: IntegrationSecret = { 
       type, 
       value: encryptedVal, 
@@ -33,7 +65,6 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ secrets, setSecrets }) =>
       status: 'UNTESTED'
     };
 
-    // Mettre à jour localement d'abord pour l'UI
     const updatedSecrets = [
       ...secrets.filter(s => s.type !== type),
       newSecret
@@ -41,7 +72,6 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ secrets, setSecrets }) =>
     setSecrets(updatedSecrets);
 
     try {
-      // 2. Test de connexion immédiat
       const res = await fetch(`https://graph.facebook.com/v19.0/me?access_token=${val}`);
       const data = await res.json();
       
@@ -53,10 +83,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ secrets, setSecrets }) =>
         finalSecret
       ];
 
-      // 3. Mise à jour de l'état final
       setSecrets(finalSecrets);
-      
-      // 4. Sauvegarde dans la base de données Cloud
       await DB.saveSecrets(finalSecrets);
 
       if (finalStatus === 'VALID') {
@@ -83,6 +110,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ secrets, setSecrets }) =>
         <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">Configuration des connecteurs & sécurité</p>
       </div>
 
+      {/* Meta API Section */}
       <section className="bg-white p-10 rounded-[2.5rem] border border-slate-200 shadow-sm space-y-6">
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-3">
@@ -104,22 +132,39 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ secrets, setSecrets }) =>
             disabled={isTesting}
           />
         </div>
-        <div className="flex gap-4">
-          <button 
-            onClick={() => handleSaveAndTest('FACEBOOK', fbToken)} 
-            disabled={isTesting || !fbToken}
-            className="flex-1 px-6 py-5 bg-slate-900 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-black transition-all shadow-xl shadow-slate-200 flex items-center justify-center gap-3 disabled:opacity-50"
-          >
-            {isTesting ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
-                Vérification...
-              </>
-            ) : (
-              'Enregistrer & Tester Connexion'
-            )}
-          </button>
+        <button 
+          onClick={() => handleSaveAndTest('FACEBOOK', fbToken)} 
+          disabled={isTesting || !fbToken}
+          className="w-full px-6 py-5 bg-slate-900 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-black transition-all shadow-xl shadow-slate-200 flex items-center justify-center gap-3 disabled:opacity-50"
+        >
+          {isTesting ? <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div> : 'Enregistrer & Tester Meta'}
+        </button>
+      </section>
+
+      {/* Gemini AI Section */}
+      <section className="bg-white p-10 rounded-[2.5rem] border border-slate-200 shadow-sm space-y-6">
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-3">
+             <div className="w-10 h-10 bg-purple-100 rounded-2xl flex items-center justify-center text-purple-600">
+               <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+             </div>
+             <h3 className="text-xl font-black text-slate-800 uppercase italic">Gemini AI Intelligence</h3>
+          </div>
+          <StatusBadge status={getSecretStatus('AI')?.status} />
         </div>
+        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+          <p className="text-[10px] font-bold text-slate-500 leading-relaxed">
+            L'API Gemini est automatiquement configurée via les variables d'environnement de la plateforme. 
+            Utilisez le bouton ci-dessous pour valider l'accès aux modèles <strong>Gemini 3 Pro</strong>.
+          </p>
+        </div>
+        <button 
+          onClick={handleTestAi} 
+          disabled={isTestingAi}
+          className="w-full px-6 py-5 bg-purple-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-purple-700 transition-all shadow-xl shadow-purple-100 flex items-center justify-center gap-3"
+        >
+          {isTestingAi ? <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div> : 'Tester l\'Intégration IA'}
+        </button>
       </section>
 
       <section className="bg-slate-900 p-10 rounded-[2.5rem] border border-white/10 shadow-2xl relative overflow-hidden">
@@ -139,23 +184,9 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ secrets, setSecrets }) =>
               <div className="px-4 py-2 bg-white/5 rounded-xl border border-white/10 text-[10px] font-black text-emerald-400 uppercase tracking-widest">
                 Status: Connected
               </div>
-              <div className={`px-4 py-2 bg-white/5 rounded-xl border border-white/10 text-[10px] font-black uppercase tracking-widest ${isTesting ? 'text-amber-400' : 'text-blue-400'}`}>
-                {isTesting ? 'Syncing...' : 'Sync: Active'}
-              </div>
            </div>
         </div>
       </section>
-
-      <div className="p-8 bg-blue-50 border border-blue-100 rounded-[2rem] text-blue-800 flex gap-4 items-start">
-        <svg className="w-6 h-6 shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-        <div className="space-y-1">
-          <p className="font-black uppercase text-sm tracking-tight">Sécurité des données</p>
-          <p className="text-xs font-medium opacity-80 leading-relaxed">
-            Vos accès Facebook sont cryptés en local (Base64/AES) avant d'être synchronisés sur le cloud. 
-            Le bouton "Enregistrer" lance un audit immédiat sur les serveurs Meta pour confirmer la validité de vos accès.
-          </p>
-        </div>
-      </div>
     </div>
   );
 };
@@ -169,7 +200,7 @@ const StatusBadge = ({ status }: { status?: string }) => {
   };
   
   const currentStyle = styles[status || 'DEFAULT'] || styles.DEFAULT;
-  const label = status || 'NON CONFIGURÉ';
+  const label = status || 'NON TESTÉ';
 
   return (
     <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${currentStyle}`}>

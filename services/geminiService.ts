@@ -6,10 +6,8 @@ import { CampaignStats } from "../types";
  * Utilise Gemini 3 Pro pour transformer les données brutes en conseils stratégiques.
  */
 export const getCampaignInsights = async (campaigns: CampaignStats[]): Promise<string> => {
-  // Initialisation à chaque appel pour garantir l'utilisation de la clé API la plus récente (process.env.API_KEY)
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
-  // Préparation du contexte de données pour le modèle
   const campaignDataSummary = campaigns.map(c => 
     `- Nom: ${c.name}, Spend: ${c.spend}, CPM: ${c.cpm.toFixed(2)}, CTR: ${(c.ctr * 100).toFixed(2)}%, Conv. Démarrées: ${c.conversations_started}, CPA Started: ${c.cpa_conversation_started.toFixed(2)}, Etat: ${c.status}`
   ).join('\n');
@@ -37,17 +35,33 @@ export const getCampaignInsights = async (campaigns: CampaignStats[]): Promise<s
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview', // Passage au modèle Pro pour une meilleure analyse stratégique
+      model: 'gemini-3-pro-preview',
       contents: prompt,
       config: {
         systemInstruction: "Tu es un Growth Coach pour agences média. Ta spécialité est de traduire les métriques complexes (CPM, CTR, CPA) en instincts business. Tu ne parles jamais de chiffres bruts, uniquement de tendances de santé créative et d'opportunités de croissance."
       }
     });
 
-    // Utilisation de la propriété .text pour extraire le contenu généré
     return response.text || "Le diagnostic IA est momentanément indisponible.";
   } catch (error) {
     console.error("Gemini AI Insight Error:", error);
     throw error;
+  }
+};
+
+/**
+ * Teste la connectivité avec l'API Gemini.
+ */
+export const testGeminiConnection = async (): Promise<boolean> => {
+  try {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: 'Ping',
+    });
+    return !!response.text;
+  } catch (error) {
+    console.error("Gemini connection test failed:", error);
+    return false;
   }
 };
