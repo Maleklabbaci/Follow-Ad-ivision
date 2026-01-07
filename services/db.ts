@@ -1,11 +1,10 @@
 
-import { Client, CampaignStats, IntegrationSecret, User, UserRole } from '../types';
+import { Client, CampaignStats, IntegrationSecret, User, AuditLog, AiReport } from '../types';
 import { supabase } from './supabase';
 
 const STORAGE_KEY = 'adpulse_master_db';
 
 class DatabaseEngine {
-  // --- UTILS ---
   formatCurrency(amount: number, currency: string = 'USD'): string {
     return new Intl.NumberFormat(currency === 'EUR' ? 'fr-FR' : 'en-US', {
       style: 'currency',
@@ -14,19 +13,24 @@ class DatabaseEngine {
     }).format(amount);
   }
 
-  // --- CLOUD SYNC METHODS ---
   async fetchAll() {
     try {
-      const [clientsRes, campaignsRes, secretsRes] = await Promise.all([
+      const [clientsRes, campaignsRes, secretsRes, usersRes, logsRes, aiRes] = await Promise.all([
         supabase.from('clients').select('*'),
         supabase.from('campaigns').select('*'),
-        supabase.from('secrets').select('*')
+        supabase.from('secrets').select('*'),
+        supabase.from('users').select('*'),
+        supabase.from('audit_logs').select('*').order('timestamp', { ascending: false }).limit(100),
+        supabase.from('ai_reports').select('*').order('createdAt', { ascending: false })
       ]);
 
       return {
         clients: clientsRes.data || [],
         campaigns: campaignsRes.data || [],
-        secrets: secretsRes.data || []
+        secrets: secretsRes.data || [],
+        users: usersRes.data || [],
+        auditLogs: logsRes.data || [],
+        aiReports: aiRes.data || []
       };
     } catch (error) {
       console.error("Cloud Sync Error:", error);
@@ -34,45 +38,37 @@ class DatabaseEngine {
     }
   }
 
-  // Initialisation synchronisée avec localstorage en fallback
-  getClients(): Client[] {
+  getData() {
     const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? JSON.parse(saved).clients : [];
+    return saved ? JSON.parse(saved) : { clients: [], campaigns: [], secrets: [], users: [], auditLogs: [], aiReports: [] };
   }
 
-  getCampaigns(): CampaignStats[] {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? JSON.parse(saved).campaigns : [];
-  }
-
-  getSecrets(): IntegrationSecret[] {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? JSON.parse(saved).secrets : [];
-  }
-
-  // Sauvegarde Cloud + Locale
   async saveClients(clients: Client[]) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...this.getData(), clients }));
     await supabase.from('clients').upsert(clients);
   }
 
   async saveCampaigns(campaigns: CampaignStats[]) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...this.getData(), campaigns }));
     await supabase.from('campaigns').upsert(campaigns);
   }
 
   async saveSecrets(secrets: IntegrationSecret[]) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...this.getData(), secrets }));
     await supabase.from('secrets').upsert(secrets);
   }
 
-  private getData() {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? JSON.parse(saved) : { clients: [], campaigns: [], secrets: [] };
+  async saveUsers(users: User[]) {
+    await supabase.from('users').upsert(users);
+  }
+
+  async addAuditLog(log: AuditLog) {
+    await supabase.from('audit_logs').insert([log]);
+  }
+
+  async addAiReport(report: AiReport) {
+    await supabase.from('ai_reports').insert([report]);
   }
 
   reset() {
-    localStorage.removeItem(STORAGE_KEY);
+    localStorage.clear();
     window.location.reload();
   }
 }

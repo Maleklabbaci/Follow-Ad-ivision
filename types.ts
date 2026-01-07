@@ -10,6 +10,26 @@ export interface User {
   role: UserRole;
   clientId?: string;
   name: string;
+  password?: string;
+}
+
+export interface AuditLog {
+  id: string;
+  timestamp: string;
+  userId: string;
+  userName: string;
+  action: string;
+  resource: string;
+  ipAddress: string;
+}
+
+export interface AiReport {
+  id: string;
+  clientId: string;
+  clientName: string;
+  content: string;
+  model: string;
+  createdAt: string;
 }
 
 export interface AdAccount {
@@ -40,7 +60,7 @@ export interface CampaignStats {
   name: string;
   date: string;
   spend: number;
-  currency: string; // Ajouté: 'USD', 'EUR', 'GBP', etc.
+  currency: string; 
   impressions: number;
   reach: number;
   frequency: number;
@@ -71,4 +91,7 @@ export interface AppState {
   clients: Client[];
   secrets: IntegrationSecret[];
   campaigns: CampaignStats[];
+  users: User[];
+  auditLogs: AuditLog[];
+  aiReports: AiReport[];
 }

@@ -1,71 +1,81 @@
 
-import React, { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Client, CampaignStats, IntegrationSecret } from '../types';
+import React, { useState } from 'react';
+import { Client, CampaignStats, IntegrationSecret, User, AuditLog, AiReport } from '../types';
 
 interface AdminSqlEditorProps {
   clients: Client[];
   campaigns: CampaignStats[];
   secrets: IntegrationSecret[];
+  users: User[];
+  auditLogs: AuditLog[];
+  aiReports: AiReport[];
 }
 
-const AdminSqlEditor: React.FC<AdminSqlEditorProps> = ({ clients, campaigns, secrets }) => {
-  const navigate = useNavigate();
-  const dbSecret = secrets.find(s => s.type === 'DATABASE');
-  const isLinked = dbSecret && dbSecret.status === 'VALID';
-
-  const [query, setQuery] = useState('SELECT * FROM clients WHERE name LIKE "%Elite%"');
+const AdminSqlEditor: React.FC<AdminSqlEditorProps> = ({ clients, campaigns, secrets, users, auditLogs, aiReports }) => {
+  const [query, setQuery] = useState('SELECT * FROM audit_logs ORDER BY timestamp DESC');
   const [results, setResults] = useState<any[]>([]);
   const [columns, setColumns] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Simulated tables mapping
   const tables: Record<string, any[]> = {
     clients: clients,
     campaigns: campaigns,
-    secrets: secrets.map(s => ({ ...s, value: '******** (encrypted)' }))
+    users: users.map(u => ({ ...u, password: '••••••••' })),
+    audit_logs: auditLogs,
+    ai_reports: aiReports,
+    secrets: secrets.map(s => ({ ...s, value: '********' }))
   };
 
   const runQuery = () => {
-    if (!isLinked) {
-      alert("Database is not linked. Please provide a valid access token in Settings first.");
-      return;
-    }
-
     setIsLoading(true);
     setError(null);
     setResults([]);
     
-    // Fake latency to feel like a real DB
     setTimeout(() => {
       try {
-        const lowerQuery = query.toLowerCase().trim();
-        
-        if (!lowerQuery.startsWith('select')) {
-          throw new Error('Only SELECT queries are supported in this simulation.');
+        const q = query.toLowerCase().trim();
+        if (!q.startsWith('select')) throw new Error('Seules les requêtes SELECT sont autorisées.');
+
+        // Analyse ultra-simplifiée de la requête
+        let tableName = '';
+        if (q.includes('from audit_logs')) tableName = 'audit_logs';
+        else if (q.includes('from campaigns')) tableName = 'campaigns';
+        else if (q.includes('from users')) tableName = 'users';
+        else if (q.includes('from clients')) tableName = 'clients';
+        else if (q.includes('from ai_reports')) tableName = 'ai_reports';
+        else if (q.includes('from secrets')) tableName = 'secrets';
+        else throw new Error('Table non trouvée.');
+
+        let data = [...tables[tableName]];
+
+        // --- SIMULATION AGRÉGATIONS ---
+        if (q.includes('sum(spend)')) {
+          const total = data.reduce((acc, curr) => acc + (curr.spend || 0), 0);
+          setColumns(['total_spend_consolidated']);
+          setResults([{ total_spend_consolidated: total.toFixed(2) + ' USD' }]);
+          setIsLoading(false);
+          return;
         }
 
-        // Basic table detection
-        let targetTable = '';
-        if (lowerQuery.includes('from clients')) targetTable = 'clients';
-        else if (lowerQuery.includes('from campaigns')) targetTable = 'campaigns';
-        else if (lowerQuery.includes('from secrets')) targetTable = 'secrets';
-        else {
-          throw new Error('Unknown table. Available: clients, campaigns, secrets');
+        if (q.includes('avg(roas)')) {
+          const avg = data.reduce((acc, curr) => acc + (curr.roas || 0), 0) / (data.length || 1);
+          setColumns(['average_roas']);
+          setResults([{ average_roas: avg.toFixed(2) + 'x' }]);
+          setIsLoading(false);
+          return;
         }
 
-        let data = [...tables[targetTable]];
+        // --- SIMULATION FILTRES ---
+        if (q.includes('where')) {
+            if (q.includes("action = 'user_login'")) data = data.filter(d => d.action === 'USER_LOGIN');
+            if (q.includes("status = 'active'")) data = data.filter(d => d.status === 'ACTIVE');
+        }
 
-        // Basic Filter Simulation
-        if (lowerQuery.includes('where')) {
-          // This is a very primitive parser for demo purposes
-          if (lowerQuery.includes('status = "active"') || lowerQuery.includes("status = 'active'")) {
-            data = data.filter((item: any) => item.status === 'ACTIVE');
-          }
-          if (lowerQuery.includes('roas > 3')) {
-            data = data.filter((item: any) => item.roas > 3);
-          }
+        // --- SIMULATION ORDER BY ---
+        if (q.includes('order by')) {
+            if (q.includes('timestamp desc')) data.sort((a,b) => b.timestamp?.localeCompare(a.timestamp));
+            if (q.includes('spend desc')) data.sort((a,b) => b.spend - a.spend);
         }
 
         if (data.length > 0) {
@@ -80,176 +90,103 @@ const AdminSqlEditor: React.FC<AdminSqlEditorProps> = ({ clients, campaigns, sec
       } finally {
         setIsLoading(false);
       }
-    }, 600);
+    }, 500);
   };
 
   return (
-    <div className="flex h-full flex-col space-y-4">
+    <div className="flex h-full flex-col space-y-6 animate-in fade-in duration-500">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900">SQL Advanced Console</h2>
+          <h2 className="text-3xl font-black text-slate-900 tracking-tight uppercase italic">Cloud SQL Master</h2>
           <div className="flex items-center gap-2 mt-1">
-            <div className={`w-2 h-2 rounded-full ${isLinked ? 'bg-emerald-500' : 'bg-red-500 animate-pulse'}`}></div>
-            <p className={`text-sm font-medium ${isLinked ? 'text-emerald-600' : 'text-red-600'}`}>
-              {isLinked ? 'Linked to Live Database' : 'Database Disconnected'}
+            <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+              Instance : adpulse-prod-01 • Multi-Tenant : Active
             </p>
           </div>
         </div>
-        {!isLinked && (
-          <button 
-            onClick={() => navigate('/admin/settings')}
-            className="px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-bold hover:bg-black transition-all flex items-center gap-2"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-            </svg>
-            Link Access Token
-          </button>
-        )}
-        {isLinked && (
-          <div className="flex gap-2">
-              <button 
-                  onClick={() => setQuery('SELECT * FROM campaigns WHERE roas > 3')}
-                  className="text-xs px-3 py-1 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors"
-              >
-                  Find High ROAS
-              </button>
-              <button 
-                  onClick={() => setQuery('SELECT * FROM clients')}
-                  className="text-xs px-3 py-1 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors"
-              >
-                  List All Clients
-              </button>
-          </div>
-        )}
+        <div className="flex gap-2">
+            <button onClick={() => setQuery("SELECT SUM(spend) FROM campaigns")} className="px-3 py-2 bg-blue-50 text-blue-600 rounded-xl text-[10px] font-black uppercase hover:bg-blue-100 transition-all">Calc Spend</button>
+            <button onClick={() => setQuery("SELECT * FROM audit_logs ORDER BY timestamp DESC")} className="px-3 py-2 bg-slate-100 text-slate-600 rounded-xl text-[10px] font-black uppercase hover:bg-slate-200 transition-all">Security Logs</button>
+            <button onClick={() => setQuery("SELECT * FROM ai_reports ORDER BY createdAt DESC")} className="px-3 py-2 bg-purple-50 text-purple-600 rounded-xl text-[10px] font-black uppercase hover:bg-purple-100 transition-all">AI Reports</button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 flex-1 min-h-0">
-        {/* Sidebar Schema */}
-        <div className="lg:col-span-1 bg-white rounded-xl border border-slate-200 p-4 overflow-y-auto">
-          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Schema Explorer</h3>
-          {!isLinked ? (
-            <div className="text-center py-8">
-              <p className="text-xs text-slate-400 italic">Connect your database token to view schema.</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {Object.keys(tables).map(tableName => (
-                <div key={tableName}>
-                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 mb-2">
-                    <svg className="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
-                    </svg>
-                    {tableName}
-                  </div>
-                  <div className="pl-6 space-y-1">
-                    {Object.keys(tables[tableName][0] || {}).map(col => (
-                      <div key={col} className="text-xs text-slate-500 flex justify-between">
-                        <span>{col}</span>
-                        <span className="text-[10px] text-slate-300 font-mono italic">any</span>
-                      </div>
-                    ))}
-                  </div>
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 flex-1 min-h-0">
+        {/* Schema Sidebar */}
+        <div className="lg:col-span-1 bg-white rounded-[2rem] border border-slate-200 p-8 overflow-y-auto shadow-sm">
+          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Database Schema</h3>
+          <div className="space-y-6">
+            {Object.keys(tables).map(tableName => (
+              <div key={tableName} className="group cursor-pointer" onClick={() => setQuery(`SELECT * FROM ${tableName} LIMIT 50`)}>
+                <div className="flex items-center gap-2 text-xs font-black text-slate-800 mb-2 uppercase italic group-hover:text-blue-600">
+                   <div className="w-1.5 h-1.5 rounded-full bg-slate-300 group-hover:bg-blue-500"></div>
+                   {tableName}
                 </div>
-              ))}
-            </div>
-          )}
+                <div className="pl-4 space-y-1 border-l-2 border-slate-100 ml-0.5">
+                  {Object.keys(tables[tableName][0] || {}).map(col => (
+                    <div key={col} className="text-[9px] text-slate-400 font-bold uppercase tracking-tight">{col}</div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
 
-        {/* Editor Area */}
-        <div className="lg:col-span-3 flex flex-col space-y-4 min-h-0">
-          <div className="bg-slate-900 rounded-xl overflow-hidden flex flex-col shadow-inner">
-            <div className="bg-slate-800 px-4 py-2 flex justify-between items-center border-b border-slate-700">
-              <span className="text-xs font-mono text-slate-400">query_console.sql</span>
+        <div className="lg:col-span-3 flex flex-col space-y-6 min-h-0">
+          <div className="bg-slate-900 rounded-[2.5rem] overflow-hidden flex flex-col shadow-2xl border border-white/5 ring-8 ring-slate-100">
+            <div className="bg-slate-800/80 px-8 py-4 flex justify-between items-center">
+              <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">adpulse_saas_query.sql</span>
               <div className="flex gap-2">
-                <div className="w-2 h-2 rounded-full bg-red-500"></div>
-                <div className="w-2 h-2 rounded-full bg-amber-500"></div>
-                <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                <div className="w-2.5 h-2.5 rounded-full bg-red-500"></div>
+                <div className="w-2.5 h-2.5 rounded-full bg-amber-500"></div>
+                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>
               </div>
             </div>
             <textarea
-              className={`w-full h-40 bg-slate-900 text-blue-400 font-mono p-4 outline-none resize-none placeholder-slate-700 text-sm leading-relaxed ${!isLinked && 'opacity-50 grayscale'}`}
+              className="w-full h-40 bg-slate-900 text-emerald-400 font-mono p-10 outline-none resize-none text-sm leading-relaxed"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               spellCheck={false}
-              disabled={!isLinked}
-              placeholder={isLinked ? "Write your SQL here..." : "Link your database to start writing queries."}
             />
-            <div className="bg-slate-800 p-3 flex justify-end">
-              <button
-                onClick={runQuery}
-                disabled={isLoading || !isLinked}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold text-sm hover:bg-blue-700 transition-colors shadow-lg flex items-center gap-2 disabled:opacity-50"
-              >
-                {isLoading ? (
-                  <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                ) : (
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
-                  </svg>
-                )}
-                Run Query
-              </button>
+            <div className="bg-slate-800/50 p-6 px-10 flex justify-between items-center">
+                <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest italic">Simulation : Agrégations et tris supportés</p>
+                <button
+                    onClick={runQuery}
+                    disabled={isLoading}
+                    className="px-10 py-4 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition-all shadow-xl shadow-blue-500/20 flex items-center gap-3"
+                >
+                    {isLoading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : 'RUN QUERY'}
+                </button>
             </div>
           </div>
 
-          {/* Results Table */}
-          <div className="bg-white rounded-xl border border-slate-200 flex-1 overflow-hidden flex flex-col min-h-0 shadow-sm">
-            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <h3 className="text-sm font-bold text-slate-700">Query Results {results.length > 0 && `(${results.length})`}</h3>
-              {results.length > 0 && (
-                  <button 
-                    onClick={() => alert(JSON.stringify(results, null, 2))}
-                    className="text-xs text-blue-600 font-medium hover:underline"
-                  >
-                      Export JSON
-                  </button>
-              )}
+          <div className="bg-white rounded-[2.5rem] border border-slate-200 flex-1 overflow-hidden flex flex-col min-h-0 shadow-sm">
+            <div className="px-10 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">Résultats {results.length > 0 && `(${results.length} lignes)`}</h3>
             </div>
             
-            <div className="flex-1 overflow-auto">
-              {!isLinked ? (
-                <div className="p-12 text-center space-y-4">
-                  <div className="w-16 h-16 bg-slate-50 border border-slate-200 rounded-full flex items-center justify-center mx-auto text-slate-300">
-                    <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                    </svg>
-                  </div>
-                  <div className="max-w-xs mx-auto">
-                    <p className="text-sm font-bold text-slate-800">Connection Required</p>
-                    <p className="text-xs text-slate-500 mt-1">Please provide your database access token in the settings panel to enable the SQL query console.</p>
-                  </div>
-                </div>
-              ) : error ? (
-                <div className="p-8 flex flex-col items-center justify-center text-center space-y-3">
-                    <div className="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center text-red-500">
-                        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                        </svg>
-                    </div>
-                    <div>
-                        <p className="text-sm font-bold text-red-600">SQL Error</p>
-                        <p className="text-xs text-slate-500 font-mono mt-1">{error}</p>
-                    </div>
+            <div className="flex-1 overflow-auto custom-scrollbar">
+              {error ? (
+                <div className="p-16 text-center space-y-4">
+                    <div className="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center text-red-500 mx-auto">!</div>
+                    <p className="text-xs font-black text-red-600 uppercase tracking-widest">{error}</p>
                 </div>
               ) : results.length > 0 ? (
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-100 text-slate-600 font-mono sticky top-0">
+                <table className="w-full text-left">
+                  <thead className="bg-slate-50 text-slate-400 font-black text-[9px] uppercase tracking-widest sticky top-0 z-10">
                     <tr>
                       {columns.map(col => (
-                        <th key={col} className="px-4 py-3 border-b border-slate-200 uppercase tracking-wider">{col}</th>
+                        <th key={col} className="px-10 py-5 border-b border-slate-100">{col}</th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 font-mono">
+                  <tbody className="divide-y divide-slate-100 font-mono text-[10px]">
                     {results.map((row, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50">
+                      <tr key={idx} className="hover:bg-blue-50/30 transition-colors">
                         {columns.map(col => (
-                          <td key={col} className="px-4 py-3 text-slate-700 whitespace-nowrap">
-                            {typeof row[col] === 'object' ? JSON.stringify(row[col]) : String(row[col])}
+                          <td key={col} className="px-10 py-4 text-slate-600 whitespace-nowrap">
+                            {typeof row[col] === 'object' ? 'OBJ' : String(row[col])}
                           </td>
                         ))}
                       </tr>
@@ -257,8 +194,8 @@ const AdminSqlEditor: React.FC<AdminSqlEditorProps> = ({ clients, campaigns, sec
                   </tbody>
                 </table>
               ) : (
-                <div className="p-12 text-center text-slate-400 italic text-sm">
-                    No results to display. Run a query to start analyzing.
+                <div className="p-20 text-center text-slate-300 italic font-black text-[10px] uppercase tracking-widest">
+                    Aucun résultat cloud trouvé
                 </div>
               )}
             </div>

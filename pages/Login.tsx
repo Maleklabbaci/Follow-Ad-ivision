@@ -4,83 +4,100 @@ import { User, UserRole } from '../types';
 
 interface LoginProps {
   onLogin: (user: User) => void;
+  users: User[];
 }
 
-const Login: React.FC<LoginProps> = ({ onLogin }) => {
+const Login: React.FC<LoginProps> = ({ onLogin, users = [] }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError(null);
     
-    // Simple mock authentication logic
+    // Authentification Dynamique
     setTimeout(() => {
       setLoading(false);
-      if (email === 'admin@agency.com') {
-        onLogin({ id: 'u1', email, name: 'Senior Architect', role: UserRole.ADMIN });
-      } else if (email === 'client@bloom.com') {
-        onLogin({ id: 'u2', email, name: 'Bloom Boutique', role: UserRole.CLIENT, clientId: 'c2' });
+      const foundUser = users.find(u => 
+        u.email.toLowerCase() === email.toLowerCase() && 
+        u.password === password
+      );
+
+      if (foundUser) {
+        onLogin(foundUser);
       } else {
-        alert('Credentials: admin@agency.com or client@bloom.com (any password)');
+        setError('Identifiants incorrects. Veuillez vérifier votre email ou mot de passe.');
       }
-    }, 1000);
+    }, 1200);
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-100 px-4">
-      <div className="max-w-md w-full bg-white p-8 rounded-2xl shadow-xl space-y-8">
+    <div className="min-h-screen flex items-center justify-center bg-slate-950 px-4 relative overflow-hidden">
+      {/* Background Decor */}
+      <div className="absolute top-[-10%] right-[-10%] w-96 h-96 bg-blue-600/20 blur-[120px] rounded-full"></div>
+      <div className="absolute bottom-[-10%] left-[-10%] w-96 h-96 bg-emerald-600/10 blur-[120px] rounded-full"></div>
+
+      <div className="max-w-md w-full bg-white p-12 rounded-[3rem] shadow-2xl space-y-10 relative z-10 border border-white/10">
         <div className="text-center">
-          <div className="inline-flex p-3 bg-blue-600 rounded-xl mb-4">
+          <div className="inline-flex p-4 bg-slate-900 rounded-[1.5rem] mb-6 shadow-2xl shadow-blue-200">
             <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
             </svg>
           </div>
-          <h1 className="text-3xl font-bold text-slate-900">AdPulse AI</h1>
-          <p className="text-slate-500 mt-2">Marketing Excellence, AI-Powered.</p>
+          <h1 className="text-4xl font-black text-slate-900 tracking-tighter italic uppercase">AdPulse SaaS</h1>
+          <p className="text-slate-400 mt-2 text-xs font-bold uppercase tracking-widest">Connect to your Marketing Suite</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700">Email Address</label>
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Email Address</label>
             <input
               type="email"
               required
-              className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-              placeholder="name@agency.com"
+              className="w-full px-6 py-4 rounded-2xl bg-slate-50 border border-slate-100 focus:ring-2 focus:ring-blue-600 outline-none transition-all font-bold text-sm"
+              placeholder="votre@agence.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
           </div>
           
           <div className="space-y-2">
-            <div className="flex justify-between">
-              <label className="text-sm font-medium text-slate-700">Password</label>
-              <a href="#" className="text-xs text-blue-600 hover:underline">Forgot?</a>
+            <div className="flex justify-between ml-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Password</label>
             </div>
             <input
               type="password"
               required
-              className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+              className="w-full px-6 py-4 rounded-2xl bg-slate-50 border border-slate-100 focus:ring-2 focus:ring-blue-600 outline-none transition-all font-bold text-sm"
               placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
           </div>
 
+          {error && (
+            <div className="p-4 bg-red-50 text-red-600 rounded-2xl text-[10px] font-black uppercase tracking-tight text-center border border-red-100">
+              {error}
+            </div>
+          )}
+
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-100 flex items-center justify-center gap-2"
+            className="w-full py-5 bg-slate-900 text-white rounded-[1.5rem] font-black uppercase tracking-widest text-xs hover:bg-black transition-all shadow-2xl shadow-slate-200 flex items-center justify-center gap-3 disabled:opacity-50"
           >
-            {loading ? 'Authenticating...' : 'Sign In'}
+            {loading ? (
+              <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+            ) : 'Sign In To Dashboard'}
           </button>
         </form>
 
-        <div className="text-center">
-          <p className="text-xs text-slate-400">
-            Restricted access. Use provided agency credentials.
+        <div className="text-center pt-4">
+          <p className="text-[8px] text-slate-300 font-black uppercase tracking-[0.3em] leading-relaxed">
+            Authorized Access Only • AES-256 Multi-Cloud Sync Active
           </p>
         </div>
       </div>
