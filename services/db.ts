@@ -12,75 +12,78 @@ class DatabaseEngine {
   }
 
   async fetchAll() {
-    console.log("--- Syncing with Supabase Cloud ---");
+    console.log("--- Syncing from Cloud (Supabase) ---");
     try {
-      const [clientsRes, campaignsRes, secretsRes, usersRes, logsRes, aiRes, creativeRes, marketRes, forecastRes] = await Promise.all([
+      const [clientsRes, campaignsRes, secretsRes, usersRes, logsRes] = await Promise.all([
         supabase.from('clients').select('*'),
         supabase.from('campaigns').select('*'),
         supabase.from('secrets').select('*'),
         supabase.from('users').select('*'),
-        supabase.from('audit_logs').select('*').order('timestamp', { ascending: false }).limit(100),
-        supabase.from('ai_reports').select('*').order('createdAt', { ascending: false }),
-        supabase.from('creative_performance').select('*'),
-        supabase.from('market_benchmarks').select('*'),
-        supabase.from('predictive_forecasts').select('*')
+        supabase.from('audit_logs').select('*').order('timestamp', { ascending: false }).limit(50)
       ]);
 
-      // Vérification des erreurs pour le debugging
-      if (usersRes.error) {
-        console.error("Supabase User Fetch Error:", usersRes.error);
-      } else {
-        console.log(`Successfully loaded ${usersRes.data?.length || 0} users.`);
-      }
-
-      const mappedUsers = (usersRes.data || []).map((u: any) => ({
-        ...u,
-        password: u.password_hash || u.password
-      }));
+      if (clientsRes.error) throw clientsRes.error;
 
       return {
         clients: clientsRes.data || [],
         campaigns: campaignsRes.data || [],
         secrets: secretsRes.data || [],
-        users: mappedUsers,
+        users: (usersRes.data || []).map((u: any) => ({
+          ...u,
+          password: u.password_hash || u.password
+        })),
         auditLogs: logsRes.data || [],
-        aiReports: aiRes.data || [],
-        creativePerformance: creativeRes.data || [],
-        marketBenchmarks: marketRes.data || [],
-        predictiveForecasts: forecastRes.data || []
+        aiReports: [],
+        creativePerformance: [],
+        marketBenchmarks: [],
+        predictiveForecasts: []
       };
-    } catch (error) {
-      console.error("Critical Cloud Sync Error:", error);
+    } catch (error: any) {
+      console.error("Supabase Connection Error:", error.message);
       return null;
     }
   }
 
   async addAuditLog(log: AuditLog) {
-    await supabase.from('audit_logs').insert([log]);
+    await supabase.from('audit_logs').upsert(log, { onConflict: 'id' });
   }
 
   async saveSecrets(secrets: IntegrationSecret[]) {
-    await supabase.from('secrets').upsert(secrets);
-  }
-
-  async saveCreativeStats(stats: CreativePerformance[]) {
-    await supabase.from('creative_performance').upsert(stats);
+    const { error } = await supabase.from('secrets').upsert(secrets, { onConflict: 'type' });
+    if (error) throw error;
   }
 
   async saveClients(clients: Client[]) {
-    await supabase.from('clients').upsert(clients);
+    // On s'assure que les données sont propres pour l'upsert
+    const { error } = await supabase.from('clients').upsert(clients, { onConflict: 'id' });
+    if (error) {
+      console.error("Client Save Failed:", error.message);
+      throw error;
+    }
   }
 
   async saveUsers(users: User[]) {
-    const dbUsers = users.map(u => {
-      const { password, ...rest } = u;
-      return { ...rest, password_hash: password };
-    });
-    await supabase.from('users').upsert(dbUsers);
+    const dbUsers = users.map(u => ({
+      id: u.id,
+      email: u.email,
+      name: u.name,
+      role: u.role,
+      clientId: u.clientId || null,
+      password_hash: u.password || u.password_hash
+    }));
+    const { error } = await supabase.from('users').upsert(dbUsers, { onConflict: 'id' });
+    if (error) {
+      console.error("User Save Failed:", error.message);
+      throw error;
+    }
   }
 
   async saveCampaigns(campaigns: CampaignStats[]) {
-    await supabase.from('campaigns').upsert(campaigns);
+    const { error } = await supabase.from('campaigns').upsert(campaigns, { onConflict: 'id' });
+    if (error) {
+      console.error("Campaign Save Failed:", error.message);
+      throw error;
+    }
   }
 }
 

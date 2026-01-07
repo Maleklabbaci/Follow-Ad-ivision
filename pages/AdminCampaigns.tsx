@@ -2,6 +2,7 @@
 import React, { useMemo, useState } from 'react';
 import { Client, CampaignStats, IntegrationSecret } from '../types';
 import { decryptSecret } from '../services/cryptoService';
+import { DB } from '../services/db';
 
 interface AdminCampaignsProps {
   clients: Client[];
@@ -76,15 +77,12 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({
       const token = await decryptSecret(fbSecret.value);
       let newCampaignsMap = new Map<string, CampaignStats>();
       
-      // On garde les anciennes campagnes simulées ou non touchées par le filtre
       campaigns.forEach(c => newCampaignsMap.set(c.campaignId, c));
 
       const AOV = 145.0; 
 
       for (let i = 0; i < clients.length; i++) {
         const client = clients[i];
-        
-        // On ne traite que les clients qui ont déjà des campagnes associées
         if (!client.campaignIds || client.campaignIds.length === 0) {
           log(`Saut : ${client.name} (Aucune campagne liée)`);
           continue;
@@ -94,7 +92,6 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({
         
         for (const adAccountId of (client.adAccounts || [])) {
           try {
-            // Extraction des données pour ce compte publicitaire
             const url = `https://graph.facebook.com/v19.0/${adAccountId}/campaigns?fields=name,status,id,insights.date_preset(maximum){spend,impressions,reach,frequency,clicks,actions}&access_token=${token}`;
             const res = await fetch(url);
             const data = await res.json();
@@ -108,14 +105,10 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({
 
               matchedFromMeta.forEach((metaCp: any) => {
                 const insight = metaCp.insights?.data?.[0] || {};
-                
                 let totalConversions = 0;
                 if (insight.actions) {
                   const convActions = insight.actions.filter((a: any) => 
-                    a.action_type.includes('purchase') || 
-                    a.action_type.includes('lead') || 
-                    a.action_type.includes('complete_registration') ||
-                    a.action_type.includes('conversion')
+                    a.action_type.includes('purchase') || a.action_type.includes('conversion')
                   );
                   totalConversions = convActions.reduce((sum: number, a: any) => sum + parseInt(a.value), 0);
                 }
@@ -125,7 +118,6 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({
                 const reach = parseInt(insight.reach) || 0;
                 const clicks = parseInt(insight.clicks) || 0;
                 const frequency = parseFloat(insight.frequency) || (reach > 0 ? impressions / reach : 1);
-
                 const currency = client.name.toLowerCase().includes('fitness') ? 'USD' : 'EUR';
 
                 const stats: CampaignStats = {
@@ -162,8 +154,13 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({
         setProgress(Math.round(((i + 1) / clients.length) * 100));
       }
 
-      setCampaigns(Array.from(newCampaignsMap.values()));
-      log('Audit des campagnes liées terminé.');
+      const finalCampaigns = Array.from(newCampaignsMap.values());
+      setCampaigns(finalCampaigns);
+      
+      // SAUVEGARDE AUTOMATIQUE SUR LE CLOUD
+      await DB.saveCampaigns(finalCampaigns);
+      
+      log('Audit terminé et sauvegardé dans Supabase.');
       setTimeout(() => setIsSyncing(false), 2000);
     } catch (err) {
       log('Échec critique de l\'audit.');
@@ -176,15 +173,14 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-4xl font-black text-slate-900 tracking-tight italic uppercase">Data Certification</h2>
-          <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">Synchronisation sélective • Campagnes autorisées</p>
+          <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">Synchronisation Cloud Active</p>
         </div>
         <button 
           onClick={runGlobalExtraction}
           disabled={isSyncing}
           className="px-8 py-4 bg-slate-900 text-white rounded-2xl font-black text-sm hover:bg-black transition-all shadow-2xl flex items-center gap-3"
         >
-          {isRefreshingIcon(isSyncing)}
-          {isSyncing ? 'EXTRACTION EN COURS...' : 'LANCER AUDIT COMPLET'}
+          {isSyncing ? 'EXTRACTION EN COURS...' : 'LANCER AUDIT COMPLET & SAVE'}
         </button>
       </div>
 
@@ -192,7 +188,7 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({
         <HealthCard label="Source API" value={`${healthStats.integrity}%`} sub="Extraction Réelle" color="blue" />
         <HealthCard label="Audit Conversions" value="SÉLECTIF" sub="Uniquement campagnes liées" color="emerald" />
         <HealthCard label="Portefeuille" value={campaigns.length.toString()} sub="Total Campagnes" color="slate" />
-        <HealthCard label="Spend Global" value={`$${healthStats.totalSpend.toLocaleString()}`} sub="Validé" color="indigo" />
+        <HealthCard label="Spend Global" value={`$${healthStats.totalSpend.toLocaleString()}`} sub="Validé Cloud" color="indigo" />
       </div>
 
       <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
@@ -229,9 +225,7 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({
                   </td>
                   <td className="px-10 py-8 text-right font-black text-slate-500">{cp.reach?.toLocaleString() || '---'}</td>
                   <td className="px-10 py-8 text-right font-black text-slate-900">${cp.spend.toLocaleString()}</td>
-                  <td className={`px-10 py-8 text-right font-black ${cp.conversions > 0 ? 'text-emerald-600' : 'text-slate-300'}`}>
-                    {cp.conversions || 0}
-                  </td>
+                  <td className={`px-10 py-8 text-right font-black ${cp.conversions > 0 ? 'text-emerald-600' : 'text-slate-300'}`}>{cp.conversions || 0}</td>
                   <td className="px-10 py-8 text-right font-black text-blue-600">{cp.roas.toFixed(2)}x</td>
                   <td className="px-10 py-8 text-right">
                     <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${cp.dataSource === 'REAL_API' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
@@ -248,7 +242,7 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({
       {isSyncing && (
         <div className="fixed bottom-10 right-10 w-96 bg-slate-900 text-white rounded-[2rem] p-8 shadow-2xl z-50 border border-white/10">
           <div className="flex justify-between items-center mb-6">
-            <span className="text-xs font-black uppercase tracking-widest text-blue-400">Audit Temps Réel...</span>
+            <span className="text-xs font-black uppercase tracking-widest text-blue-400">Synchronisation Supabase...</span>
             <span className="text-xs font-bold">{progress}%</span>
           </div>
           <div className="space-y-1 h-24 overflow-y-auto text-[9px] font-mono opacity-60 mb-4 custom-scrollbar">
@@ -278,11 +272,5 @@ const HealthCard = ({ label, value, sub, color }: any) => {
     </div>
   );
 };
-
-const isRefreshingIcon = (active: boolean) => (
-  <svg className={`w-5 h-5 ${active ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-  </svg>
-);
 
 export default AdminCampaigns;
