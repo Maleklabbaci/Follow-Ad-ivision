@@ -46,6 +46,26 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({ clients, campaigns, set
 
   const log = (msg: string) => setSyncLogs(prev => [msg, ...prev].slice(0, 10));
 
+  // SUPPRESSION INDIVIDUELLE
+  const handleDelete = (id: string, name: string) => {
+    if (window.confirm(`Confirmer la suppression de la campagne : ${name} ?`)) {
+      setCampaigns(prev => prev.filter(c => c.id !== id));
+    }
+  };
+
+  // NETTOYAGE DES DONNÉES SIMULÉES (MOCK)
+  const purgeMockData = () => {
+    const mockCount = campaigns.filter(c => c.dataSource === 'MOCK').length;
+    if (mockCount === 0) {
+      alert("Aucune donnée simulée à supprimer.");
+      return;
+    }
+    if (window.confirm(`Voulez-vous supprimer définitivement les ${mockCount} campagnes simulées pour ne garder que les données réelles ?`)) {
+      setCampaigns(prev => prev.filter(c => c.dataSource === 'REAL_API'));
+      alert("Nettoyage terminé.");
+    }
+  };
+
   // EXTRACTION GLOBALE META
   const runGlobalExtraction = async () => {
     const fbSecret = secrets.find(s => s.type === 'FACEBOOK');
@@ -115,32 +135,6 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({ clients, campaigns, set
     }
   };
 
-  // AUDIT D'INTÉGRITÉ GLOBAL (Validation des Metrics)
-  const runIntegrityAudit = () => {
-    setIsAuditing(true);
-    setProgress(0);
-    setSyncLogs(['Initialisation de l\'audit de conformité...']);
-
-    setTimeout(() => {
-      setCampaigns(prev => prev.map((cp, idx) => {
-        const anomalies: string[] = [];
-        if (cp.impressions > 0 && cp.clicks === 0) anomalies.push('Metrics incohérentes: Impressions sans clics.');
-        if (cp.spend > 0 && cp.conversions === 0) anomalies.push('Performance critique: Spend sans conversion.');
-        if (cp.roas > 20) anomalies.push('Donnée suspecte: ROAS supérieur à 20x.');
-
-        log(`Analyse ${cp.name}...`);
-        
-        return {
-          ...cp,
-          isValidated: anomalies.length === 0,
-          auditLogs: [...(cp.auditLogs || []), `Audit d'intégrité passé le ${new Date().toLocaleString()}. ${anomalies.length > 0 ? `Alertes: ${anomalies.join(' ')}` : 'Aucune anomalie détectée.'}`]
-        };
-      }));
-      setIsAuditing(false);
-      log('Audit d\'intégrité terminé.');
-    }, 2000);
-  };
-
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-20">
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
@@ -150,11 +144,10 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({ clients, campaigns, set
         </div>
         <div className="flex flex-wrap gap-3 w-full lg:w-auto">
           <button 
-            onClick={runIntegrityAudit}
-            disabled={isAuditing || isSyncing}
-            className="flex-1 lg:flex-none px-6 py-3 bg-white border border-slate-200 text-slate-900 rounded-2xl font-black text-sm hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+            onClick={purgeMockData}
+            className="flex-1 lg:flex-none px-6 py-3 bg-red-50 text-red-600 border border-red-100 rounded-2xl font-black text-sm hover:bg-red-600 hover:text-white transition-all flex items-center justify-center gap-2"
           >
-            Audit d'Intégrité
+            Nettoyer Simulations
           </button>
           <button 
             onClick={runGlobalExtraction}
@@ -184,14 +177,6 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({ clients, campaigns, set
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
             />
-            <select 
-              className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none"
-              value={filterClient}
-              onChange={e => setFilterClient(e.target.value)}
-            >
-              <option value="all">Tous Clients</option>
-              {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
           </div>
         </div>
 
@@ -204,11 +189,12 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({ clients, campaigns, set
                 <th className="px-8 py-5 text-right">Metrics</th>
                 <th className="px-8 py-5 text-right">ROAS</th>
                 <th className="px-8 py-5 text-right">Dernier Check</th>
+                <th className="px-8 py-5 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredCampaigns.map(cp => (
-                <tr key={cp.id} className="hover:bg-slate-50/80 transition-all">
+                <tr key={cp.id} className="hover:bg-slate-50/80 transition-all group">
                   <td className="px-8 py-6">
                     <div className="font-bold text-slate-900 line-clamp-1">{cp.name}</div>
                     <div className="flex items-center gap-2 mt-1">
@@ -238,8 +224,26 @@ const AdminCampaigns: React.FC<AdminCampaignsProps> = ({ clients, campaigns, set
                       {cp.lastSync ? new Date(cp.lastSync).toLocaleTimeString() : '---'}
                     </div>
                   </td>
+                  <td className="px-8 py-6 text-right">
+                    <button 
+                      onClick={() => handleDelete(cp.id, cp.name)}
+                      className="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                      title="Supprimer la campagne"
+                    >
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-4v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </td>
                 </tr>
               ))}
+              {filteredCampaigns.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-8 py-20 text-center text-slate-400 italic font-medium">
+                    Aucune campagne trouvée. Importez des données via Meta ou vérifiez vos filtres.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
