@@ -12,9 +12,10 @@ interface Message {
 interface AdPulseChatbotProps {
   secrets: IntegrationSecret[];
   campaigns?: CampaignStats[];
+  activeClientName?: string;
 }
 
-const AdPulseChatbot: React.FC<AdPulseChatbotProps> = ({ secrets, campaigns = [] }) => {
+const AdPulseChatbot: React.FC<AdPulseChatbotProps> = ({ secrets, campaigns = [], activeClientName }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     { role: 'bot', content: "Bienvenue sur AdPulse AI ! 🚀 Je suis votre guide. Voulez-vous savoir pourquoi nous sommes plus efficaces qu'une agence traditionnelle ?" }
@@ -40,8 +41,7 @@ const AdPulseChatbot: React.FC<AdPulseChatbotProps> = ({ secrets, campaigns = []
       const apiKey = aiSecret && aiSecret.value !== 'managed_by_env' ? await decryptSecret(aiSecret.value) : undefined;
       const history = messages.slice(-4).map(m => ({ role: m.role === 'user' ? 'user' : 'model', content: m.content }));
       
-      // On passe les campagnes pour que le chatbot puisse analyser les données réelles
-      const response = await getChatbotResponse(msg, history, apiKey, campaigns);
+      const response = await getChatbotResponse(msg, history, apiKey, campaigns, activeClientName);
       setMessages(prev => [...prev, { role: 'bot', content: response }]);
     } catch {
       setMessages(prev => [...prev, { role: 'bot', content: "L'IA est en cours de recalibrage. Posez-moi une autre question !" }]);
@@ -50,11 +50,9 @@ const AdPulseChatbot: React.FC<AdPulseChatbotProps> = ({ secrets, campaigns = []
     }
   };
 
-  const suggestedQuestions = [
-    "Analyse mes perfs",
-    "Pourquoi vous choisir ?",
-    "Est-ce sécurisé ?"
-  ];
+  const suggestedQuestions = activeClientName 
+    ? ["Analyse mes perfs", "Budget gaspillé ?", "Conseils créas"]
+    : ["Pourquoi AdPulse ?", "Est-ce sécurisé ?", "Parler à un expert"];
 
   return (
     <div className="fixed bottom-6 right-6 z-[100] flex flex-col items-end">
@@ -68,7 +66,9 @@ const AdPulseChatbot: React.FC<AdPulseChatbotProps> = ({ secrets, campaigns = []
               <div>
                 <p className="font-black italic uppercase tracking-tighter text-sm">PulseBot Agent</p>
                 <div className="flex items-center gap-1">
-                   <span className="text-[9px] font-bold text-emerald-400 uppercase tracking-widest">Active Analyser</span>
+                   <span className="text-[9px] font-bold text-emerald-400 uppercase tracking-widest">
+                     {activeClientName ? `Analyste: ${activeClientName}` : 'Active Analyser'}
+                   </span>
                    <span className="w-1 h-1 rounded-full bg-blue-400"></span>
                    <span className="text-[7px] font-bold text-slate-400 uppercase">Context Aware</span>
                 </div>

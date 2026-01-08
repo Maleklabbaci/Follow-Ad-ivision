@@ -69,26 +69,31 @@ export const getChatbotResponse = async (
   message: string, 
   history: {role: string, content: string}[], 
   apiKey?: string,
-  campaigns: CampaignStats[] = []
+  campaigns: CampaignStats[] = [],
+  activeClientName?: string
 ): Promise<string> => {
   const ai = getGeminiClient(apiKey);
   
+  const clientContext = activeClientName 
+    ? `Tu analyses actuellement les données de ton client : "${activeClientName}".`
+    : "Tu es en mode vue d'ensemble plateforme (Global).";
+
   const dataContext = campaigns.length > 0 
-    ? `\nCONTEXTE LIVE DES CAMPAGNES :\n${campaigns.slice(0, 10).map(c => `- ${c.name}: ${c.results} résultats, ${c.spend} dépense, statut ${c.status}`).join('\n')}`
-    : "\nAucune donnée de campagne active pour le moment.";
+    ? `\nCONTEXTE LIVE DES CAMPAGNES (Max 10) :\n${campaigns.slice(0, 10).map(c => `- ${c.name}: ${c.results} résultats, ${c.spend} dépense, statut ${c.status}`).join('\n')}`
+    : "\nAucune donnée de campagne active détectée.";
 
   const systemPrompt = `Tu es PulseBot, l'IA d'AdPulse.
   TON RÔLE : 
-  1. Expliquer la supériorité d'AdPulse (extraction API directe, audits IA 24/7, transparence).
-  2. ANALYSER les données si l'utilisateur pose une question sur ses performances.
+  1. Expliquer pourquoi AdPulse est meilleur qu'une agence classique (IA, Transparence, Vitesse).
+  2. ANALYSER les données spécifiques fournies. ${clientContext}
+  
+  RÈGLES D'ISOLATION :
+  - Ne mentionne JAMAIS de données d'autres clients.
+  - Si activeClientName est défini, adresse-toi à lui ou mentionne que tu analyses ses comptes.
   
   ${dataContext}
   
-  RÈGLES :
-  - Sois direct, expert et enthousiaste.
-  - Utilise des emojis.
-  - Si tu analyses des données, sois ultra-précis sur les chiffres cités.
-  - Max 3-4 phrases.`;
+  STYLE : Direct, expert, Emojis autorisés. Max 3 phrases par réponse.`;
 
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',

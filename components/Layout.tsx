@@ -15,20 +15,33 @@ interface LayoutProps {
 }
 
 const Layout: React.FC<LayoutProps> = ({ user, onLogout, clients, secrets = [], campaigns = [] }) => {
-  const { clientId } = useParams<{ clientId?: string }>();
+  const { clientId: urlClientId } = useParams<{ clientId?: string }>();
   const navigate = useNavigate();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { currency, setCurrency, rates } = useCurrency();
 
-  const isImpersonating = useMemo(() => {
-    return user.role === UserRole.ADMIN && location.pathname.includes('/client/dashboard/') && clientId;
-  }, [user.role, location.pathname, clientId]);
+  // Identification du client actif (admin en audit ou client connecté)
+  const activeClientId = useMemo(() => {
+    if (user.role === UserRole.ADMIN) return urlClientId;
+    return user.clientId;
+  }, [user, urlClientId]);
 
-  const impersonatedClient = useMemo(() => {
-    if (!isImpersonating) return null;
-    return clients.find(c => c.id === clientId);
-  }, [isImpersonating, clients, clientId]);
+  const activeClient = useMemo(() => {
+    if (!activeClientId) return null;
+    return clients.find(c => c.id === activeClientId);
+  }, [activeClientId, clients]);
+
+  const isImpersonating = useMemo(() => {
+    return user.role === UserRole.ADMIN && location.pathname.includes('/client/dashboard/') && urlClientId;
+  }, [user.role, location.pathname, urlClientId]);
+
+  // Filtrage des campagnes pour le chatbot (Context Isolation)
+  const contextualCampaigns = useMemo(() => {
+    if (!activeClient) return campaigns; // Vue globale pour l'admin
+    const ids = activeClient.campaignIds || [];
+    return campaigns.filter(c => ids.includes(c.campaignId));
+  }, [activeClient, campaigns]);
 
   const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
 
@@ -60,7 +73,7 @@ const Layout: React.FC<LayoutProps> = ({ user, onLogout, clients, secrets = [], 
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
               </svg>
-              <span className="truncate">Audit: {impersonatedClient?.name || 'Client'}</span>
+              <span className="truncate">Audit: {activeClient?.name || 'Client'}</span>
             </div>
             <button 
               onClick={() => navigate('/admin/clients')}
@@ -118,8 +131,11 @@ const Layout: React.FC<LayoutProps> = ({ user, onLogout, clients, secrets = [], 
         </main>
       </div>
 
-      {/* Global AI Chatbot with same API & Campaigns context as Audit */}
-      <AdPulseChatbot secrets={secrets} campaigns={campaigns} />
+      <AdPulseChatbot 
+        secrets={secrets} 
+        campaigns={contextualCampaigns} 
+        activeClientName={activeClient?.name} 
+      />
     </div>
   );
 };
