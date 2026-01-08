@@ -94,7 +94,6 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns = [],
             const spend = parseFloat(day.spend) || 0;
             let currentResults = 0;
             if (day.actions && Array.isArray(day.actions)) {
-                // Mapping précis sur les actions de conversion ou messagerie (Resultat)
                 const targetActions = day.actions.filter((a: any) => 
                     a.action_type === 'messaging_conversation_started_7d' || 
                     a.action_type === 'onsite_conversion.messaging_conversation_started' ||
@@ -143,6 +142,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns = [],
 
   const globalCost = totals.results > 0 ? (totals.spend / totals.results) : 0;
   const globalCtr = totals.impressions > 0 ? (totals.clicks / totals.impressions * 100).toFixed(2) : '0.00';
+  const globalCpm = totals.impressions > 0 ? (totals.spend / totals.impressions) * 1000 : 0;
 
   const pulseScore = useMemo(() => {
     if (realHistoryData.length < 2) return 50;
@@ -175,9 +175,9 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns = [],
         <KPIBox label="Dépense" value={format(totals.spend)} color="white" />
         <KPIBox label="Portée" value={totals.reach.toLocaleString()} color="blue" />
         <KPIBox label="Résultats" value={totals.results.toLocaleString()} color="purple" />
-        <KPIBox label="Cost" value={format(globalCost, 'USD', 4)} color="emerald" />
+        <KPIBox label="Cost" value={format(globalCost, 'USD', 2)} color="emerald" />
         <KPIBox label="CTR Global" value={`${globalCtr}%`} color="indigo" />
-        <KPIBox label="CPM" value={format(totals.impressions > 0 ? (totals.spend / totals.impressions) * 1000 : 0)} color="slate" />
+        <KPIBox label="CPM" value={format(globalCpm)} color="slate" />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -233,7 +233,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns = [],
                   dataKey="date" 
                   axisLine={false} 
                   tickLine={false} 
-                  tick={{fontSize: 10, fontWeights: 'bold', fill: '#94a3b8'}} 
+                  tick={{fontSize: 10, fontWeight: 'bold', fill: '#94a3b8'}} 
                   dy={10}
                 />
                 <YAxis hide />
@@ -306,7 +306,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns = [],
                   </td>
                   <td className="px-6 md:px-10 py-6 text-right font-black text-slate-900 text-xs tabular-nums">{format(cp.spend)}</td>
                   <td className="px-6 md:px-10 py-6 text-right font-black text-purple-600 text-xs tabular-nums">{cp.results || 0}</td>
-                  <td className="px-6 md:px-10 py-6 text-right font-black text-emerald-600 text-xs tabular-nums">{format(cp.cost_per_result || (cp.results > 0 ? cp.spend / cp.results : 0), 'USD', 4)}</td>
+                  <td className="px-6 md:px-10 py-6 text-right font-black text-emerald-600 text-xs tabular-nums">{format(cp.cost_per_result || (cp.results > 0 ? cp.spend / cp.results : 0), 'USD', 2)}</td>
                   <td className="px-6 md:px-10 py-6 text-right font-black text-sm text-slate-400 tabular-nums">{(cp.ctr * 100).toFixed(2)}%</td>
                 </tr>
               ))}

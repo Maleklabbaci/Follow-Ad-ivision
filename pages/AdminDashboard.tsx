@@ -40,7 +40,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ clients, campaigns, sec
 
   // 2. Données pour le graphique de performance agrégée (Simulation de tendance)
   const performanceTrend = useMemo(() => {
-    // On simule une répartition sur les 7 derniers jours basée sur les totaux
     return Array.from({ length: 7 }).map((_, i) => ({
       day: `J-${6-i}`,
       spend: (platformStats.totalSpend / 7) * (0.8 + Math.random() * 0.4),
@@ -105,7 +104,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ clients, campaigns, sec
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
         <MacroKPI label="Managed Portfolio" value={format(platformStats.totalSpend)} sub="Dépense Totale Gérée" color="slate" />
         <MacroKPI label="Global Conversions" value={platformStats.totalConversions.toLocaleString()} sub="Toutes Campagnes Confondues" color="blue" />
-        <MacroKPI label="Target CPA" value={format(platformStats.avgCPA, 'USD', 2)} sub="Moyenne Plateforme" color="emerald" />
+        <MacroKPI label="Cost (Moyen)" value={format(platformStats.avgCPA, 'USD', 2)} sub="Moyenne Plateforme" color="emerald" />
         <MacroKPI label="Active Nodes" value={platformStats.activeCampaigns.toString()} sub="Flux de Données Temps Réel" color="purple" />
       </div>
 
@@ -227,7 +226,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ clients, campaigns, sec
                 <th className="px-10 py-6">Campagnes</th>
                 <th className="px-10 py-6 text-right">Dépense Totale</th>
                 <th className="px-10 py-6 text-right">Conversions</th>
-                <th className="px-10 py-6 text-right">CPA Moyen</th>
+                <th className="px-10 py-6 text-right">Cost Moyen</th>
                 <th className="px-10 py-6 text-right">Statut IA</th>
               </tr>
             </thead>

@@ -1,3 +1,4 @@
+
 import { GoogleGenAI } from "@google/genai";
 import { CampaignStats } from "../types";
 
@@ -8,7 +9,6 @@ export const getGeminiClient = (apiKey?: string) => {
   return new GoogleGenAI({ apiKey: finalKey });
 };
 
-// Fix: Added missing testGeminiConnection export for API key validation in AdminSettings.tsx
 /**
  * Tests the Gemini API connection with a simple prompt.
  */
@@ -63,22 +63,32 @@ export const getCampaignInsights = async (
 };
 
 /**
- * AGENT PULSEBOT : Onboarding & Vente
+ * AGENT PULSEBOT : Onboarding & Vente + Analyste de Performance
  */
 export const getChatbotResponse = async (
   message: string, 
   history: {role: string, content: string}[], 
-  apiKey?: string
+  apiKey?: string,
+  campaigns: CampaignStats[] = []
 ): Promise<string> => {
   const ai = getGeminiClient(apiKey);
-  const systemPrompt = `Tu es PulseBot, l'IA Onboarding d'AdPulse.
-  TON RÔLE : Expliquer pourquoi AdPulse est 10x supérieur aux agences classiques.
-  ARGUMENTS CLÉS :
-  - Extraction DIRECTE via API Meta (zéro erreur humaine).
-  - Audits IA instantanés (pas besoin d'attendre un rapport hebdo).
-  - Transparence totale : Les clients voient ce que l'admin voit.
-  - Scalabilité : On identifie les gagnants en 1 seconde.
-  STYLE : Direct, enthousiaste, expert. Utilise des emojis de fusée et de graphiques. Max 3 phrases.`;
+  
+  const dataContext = campaigns.length > 0 
+    ? `\nCONTEXTE LIVE DES CAMPAGNES :\n${campaigns.slice(0, 10).map(c => `- ${c.name}: ${c.results} résultats, ${c.spend} dépense, statut ${c.status}`).join('\n')}`
+    : "\nAucune donnée de campagne active pour le moment.";
+
+  const systemPrompt = `Tu es PulseBot, l'IA d'AdPulse.
+  TON RÔLE : 
+  1. Expliquer la supériorité d'AdPulse (extraction API directe, audits IA 24/7, transparence).
+  2. ANALYSER les données si l'utilisateur pose une question sur ses performances.
+  
+  ${dataContext}
+  
+  RÈGLES :
+  - Sois direct, expert et enthousiaste.
+  - Utilise des emojis.
+  - Si tu analyses des données, sois ultra-précis sur les chiffres cités.
+  - Max 3-4 phrases.`;
 
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',

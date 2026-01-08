@@ -1,7 +1,8 @@
+
 import React, { useMemo, useState } from 'react';
 import { Outlet, useLocation, useParams, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
-import { User, Client, UserRole, IntegrationSecret } from '../types';
+import { User, Client, UserRole, IntegrationSecret, CampaignStats } from '../types';
 import { useCurrency } from '../contexts/CurrencyContext';
 import AdPulseChatbot from './AdPulseChatbot';
 
@@ -10,9 +11,10 @@ interface LayoutProps {
   onLogout: () => void;
   clients: Client[];
   secrets?: IntegrationSecret[];
+  campaigns?: CampaignStats[];
 }
 
-const Layout: React.FC<LayoutProps> = ({ user, onLogout, clients, secrets = [] }) => {
+const Layout: React.FC<LayoutProps> = ({ user, onLogout, clients, secrets = [], campaigns = [] }) => {
   const { clientId } = useParams<{ clientId?: string }>();
   const navigate = useNavigate();
   const location = useLocation();
@@ -116,8 +118,8 @@ const Layout: React.FC<LayoutProps> = ({ user, onLogout, clients, secrets = [] }
         </main>
       </div>
 
-      {/* Global AI Chatbot */}
-      <AdPulseChatbot secrets={secrets} />
+      {/* Global AI Chatbot with same API & Campaigns context as Audit */}
+      <AdPulseChatbot secrets={secrets} campaigns={campaigns} />
     </div>
   );
 };
