@@ -24,6 +24,8 @@ const AdPulseChatbot: React.FC<AdPulseChatbotProps> = ({ secrets, campaigns = []
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  const WHATSAPP_NUMBER = "213542586904";
+
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages]);
@@ -31,6 +33,18 @@ const AdPulseChatbot: React.FC<AdPulseChatbotProps> = ({ secrets, campaigns = []
   const handleSend = async (customMsg?: string) => {
     const msg = customMsg || input.trim();
     if (!msg || isLoading) return;
+
+    // Action spéciale pour le contact expert
+    if (msg === "Parler à un expert") {
+      setMessages(prev => [...prev, { role: 'user', content: msg }]);
+      setIsLoading(true);
+      setTimeout(() => {
+        window.open(`https://wa.me/${WHATSAPP_NUMBER}`, "_blank");
+        setMessages(prev => [...prev, { role: 'bot', content: "Je vous redirige vers notre expert sur WhatsApp ! 🚀 Vous pouvez aussi nous écrire directement au +213 542 586 904." }]);
+        setIsLoading(false);
+      }, 800);
+      return;
+    }
     
     setInput('');
     setMessages(prev => [...prev, { role: 'user', content: msg }]);
@@ -52,7 +66,7 @@ const AdPulseChatbot: React.FC<AdPulseChatbotProps> = ({ secrets, campaigns = []
 
   const suggestedQuestions = activeClientName 
     ? ["Analyse mes perfs", "Budget gaspillé ?", "Conseils créas"]
-    : ["Pourquoi AdPulse ?", "Est-ce sécurisé ?", "Parler à un expert"];
+    : ["Pourquoi AdPulse ?", "Parler à un expert", "Est-ce sécurisé ?"];
 
   return (
     <div className="fixed bottom-6 right-6 z-[100] flex flex-col items-end">
@@ -102,7 +116,15 @@ const AdPulseChatbot: React.FC<AdPulseChatbotProps> = ({ secrets, campaigns = []
           <div className="p-4 bg-white border-t border-slate-100 space-y-3">
             <div className="flex gap-2 flex-wrap">
               {suggestedQuestions.map(q => (
-                <button key={q} onClick={() => handleSend(q)} className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-[9px] font-black uppercase tracking-widest hover:border-blue-500 hover:text-blue-600 transition-all">
+                <button 
+                  key={q} 
+                  onClick={() => handleSend(q)} 
+                  className={`px-3 py-1.5 border rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${
+                    q === "Parler à un expert" 
+                    ? "bg-emerald-50 border-emerald-200 text-emerald-600 hover:bg-emerald-600 hover:text-white" 
+                    : "bg-slate-50 border-slate-200 text-slate-400 hover:border-blue-500 hover:text-blue-600"
+                  }`}
+                >
                   {q}
                 </button>
               ))}
