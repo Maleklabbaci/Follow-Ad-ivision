@@ -58,14 +58,15 @@ const Layout: React.FC<LayoutProps> = ({ user, onLogout, clients, secrets = [], 
     <div className="flex h-screen overflow-hidden bg-slate-50">
       <Sidebar user={user} onLogout={onLogout} />
 
+      {/* Mobile Drawer Overlay */}
       {isMobileMenuOpen && (
         <div className="fixed inset-0 z-[60] lg:hidden">
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={toggleMobileMenu}></div>
-          <div className="fixed inset-y-0 left-0 w-[280px] bg-white shadow-2xl animate-in slide-in-from-left duration-300">
-            <div className="flex justify-end p-4">
-              <button onClick={toggleMobileMenu} className="p-2 text-slate-400 hover:text-slate-600">
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          <div className="fixed inset-0 bg-[#0f172a]/80 backdrop-blur-sm animate-in fade-in duration-300" onClick={toggleMobileMenu}></div>
+          <div className="fixed inset-y-4 left-4 w-[280px] bg-white rounded-[2rem] shadow-2xl animate-in slide-in-from-left duration-500 overflow-hidden flex flex-col border border-white/10">
+            <div className="flex justify-end p-4 absolute top-2 right-2 z-10">
+              <button onClick={toggleMobileMenu} className="p-2 text-slate-400 hover:text-slate-600 bg-slate-100 rounded-full transition-colors">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
@@ -88,9 +89,9 @@ const Layout: React.FC<LayoutProps> = ({ user, onLogout, clients, secrets = [], 
           </div>
         )}
 
-        <header className="h-14 md:h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:px-6 shrink-0 z-20">
+        <header className="h-14 md:h-16 bg-white border-b border-slate-100 flex items-center justify-between px-4 md:px-6 shrink-0 z-20">
           <div className="flex items-center gap-2">
-            <button onClick={toggleMobileMenu} className="lg:hidden p-2 -ml-2 text-slate-500 hover:bg-slate-100 rounded-lg">
+            <button onClick={toggleMobileMenu} className="lg:hidden p-2 -ml-2 text-slate-500 hover:bg-slate-100 rounded-xl transition-colors">
               <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
