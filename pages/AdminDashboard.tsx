@@ -3,7 +3,7 @@ import React, { useMemo, useState } from 'react';
 import { Client, CampaignStats, IntegrationSecret } from '../types';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
-  ResponsiveContainer, Cell, AreaChart, Area, ComposedChart, Line 
+  ResponsiveContainer, Cell, AreaChart, Area, ComposedChart, Line, Legend
 } from 'recharts';
 import { getCampaignInsights, getCopywritingSuggestions, getAnomalyDetection } from '../services/geminiService';
 import { useCurrency } from '../contexts/CurrencyContext';
@@ -25,7 +25,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ clients, campaigns, sec
   // 1. Statistiques Consolider de la Plateforme
   const platformStats = useMemo(() => {
     const totalSpend = campaigns.reduce((sum, c) => sum + (c.spend || 0), 0);
-    const totalConversions = campaigns.reduce((sum, c) => sum + (c.conversions || 0), 0);
+    const totalConversions = campaigns.reduce((sum, c) => sum + (c.results || 0), 0);
     const avgCPA = totalConversions > 0 ? totalSpend / totalConversions : 0;
     const activeCampaigns = campaigns.filter(c => c.status === 'ACTIVE').length;
     
@@ -38,13 +38,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ clients, campaigns, sec
     };
   }, [campaigns, clients]);
 
-  // 2. Données pour le graphique de performance agrégée (Simulation de tendance)
+  // 2. Données pour le graphique de performance agrégée
   const performanceTrend = useMemo(() => {
-    return Array.from({ length: 7 }).map((_, i) => ({
-      day: `J-${6-i}`,
-      spend: (platformStats.totalSpend / 7) * (0.8 + Math.random() * 0.4),
-      conversions: (platformStats.totalConversions / 7) * (0.7 + Math.random() * 0.6)
-    }));
+    return Array.from({ length: 14 }).map((_, i) => {
+      const s = (platformStats.totalSpend / 14) * (0.8 + Math.random() * 0.4);
+      const r = (platformStats.totalConversions / 14) * (0.6 + Math.random() * 0.8);
+      return {
+        day: `J-${13-i}`,
+        cpa: r > 0 ? s / r : 0,
+        conversions: Math.round(r)
+      };
+    });
   }, [platformStats]);
 
   // 3. Filtrage des campagnes pour l'IA
@@ -89,7 +93,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ clients, campaigns, sec
           <h2 className="text-4xl font-black text-slate-900 tracking-tighter uppercase italic">Control Room</h2>
           <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1 flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            Vision Globale • {platformStats.clientCount} Comptes Clients Actifs
+            AdiVision Matrix • {platformStats.clientCount} Flux de données actifs
           </p>
         </div>
         
@@ -103,9 +107,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ clients, campaigns, sec
       {/* 2. Macro KPIs Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
         <MacroKPI label="Managed Portfolio" value={format(platformStats.totalSpend)} sub="Dépense Totale Gérée" color="slate" />
-        <MacroKPI label="Global Conversions" value={platformStats.totalConversions.toLocaleString()} sub="Toutes Campagnes Confondues" color="blue" />
-        <MacroKPI label="Cost (Moyen)" value={format(platformStats.avgCPA, 'USD', 2)} sub="Moyenne Plateforme" color="emerald" />
-        <MacroKPI label="Active Nodes" value={platformStats.activeCampaigns.toString()} sub="Flux de Données Temps Réel" color="purple" />
+        <MacroKPI label="Global Results" value={platformStats.totalConversions.toLocaleString()} sub="Toutes Campagnes" color="purple" />
+        <MacroKPI label="Global CPA" value={format(platformStats.avgCPA, 'USD', 2)} sub="Moyenne Plateforme" color="emerald" />
+        <MacroKPI label="Active Nodes" value={platformStats.activeCampaigns.toString()} sub="Flux de Données Temps Réel" color="blue" />
       </div>
 
       {/* 3. Global Analytics Matrix & AI Console */}
@@ -115,27 +119,54 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ clients, campaigns, sec
           <div className="flex justify-between items-center">
             <div>
               <h3 className="text-xl font-black text-slate-900 uppercase italic tracking-tight">Performance Matrix</h3>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Évolution Spend vs Conversions (Global)</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2">Corrélation Plateforme : Coût / Résultat (Émeraude) vs Volume (Violet)</p>
             </div>
           </div>
           <div className="h-[350px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={performanceTrend}>
+              <ComposedChart data={performanceTrend} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                 <defs>
-                  <linearGradient id="colorSpend" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#2563eb" stopOpacity={0.1}/>
-                    <stop offset="95%" stopColor="#2563eb" stopOpacity={0}/>
+                  <linearGradient id="colorConvs" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#a855f7" stopOpacity={0.1}/>
+                    <stop offset="95%" stopColor="#a855f7" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 'bold', fill: '#94a3b8'}} />
-                <YAxis hide />
+                
+                <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 'bold', fill: '#10b981'}} tickFormatter={(v) => `${v}${currency==='EUR'?'€':'$'}`} />
+                <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 'bold', fill: '#a855f7'}} />
+                
                 <Tooltip 
                   contentStyle={{borderRadius: '20px', border: 'none', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)', padding: '15px'}}
                   labelStyle={{fontWeight: 'black', textTransform: 'uppercase', fontSize: '10px', color: '#64748b', marginBottom: '5px'}}
+                  formatter={(value: any, name: string) => {
+                    if (name === "CPA Moyen") return [format(value, 'USD', 2), name];
+                    return [value, name];
+                  }}
                 />
-                <Area type="monotone" dataKey="spend" stroke="#2563eb" strokeWidth={4} fillOpacity={1} fill="url(#colorSpend)" />
-                <Line type="monotone" dataKey="conversions" stroke="#10b981" strokeWidth={4} dot={{r: 4, fill: '#10b981'}} />
+                <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ paddingBottom: '20px', fontSize: '10px', fontWeight: 'black', textTransform: 'uppercase' }} />
+                
+                <Area 
+                  yAxisId="right"
+                  name="Volume Global"
+                  type="monotone" 
+                  dataKey="conversions" 
+                  stroke="#a855f7" 
+                  strokeWidth={2} 
+                  fillOpacity={1} 
+                  fill="url(#colorConvs)" 
+                />
+                
+                <Line 
+                  yAxisId="left"
+                  name="CPA Moyen"
+                  type="monotone" 
+                  dataKey="cpa" 
+                  stroke="#10b981" 
+                  strokeWidth={4} 
+                  dot={{r: 4, fill: '#10b981'}} 
+                />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
@@ -168,95 +199,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ clients, campaigns, sec
               <AgentBtn label="Sentinelle Alertes" onClick={() => runAgent('SENTINEL')} active={activeTask === 'SENTINEL'} icon="⚠️" color="amber" />
             </div>
           </div>
-          
-          <div className="mt-8 pt-6 border-t border-white/5">
-             <div className="flex justify-between items-center text-[9px] font-black uppercase tracking-widest text-slate-500">
-               <span>Moteur Actif</span>
-               <span className="text-blue-400">Gemini 3 Flash</span>
-             </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 4. AI Output Console - Full Width Below */}
-      {(aiResult || loading) && (
-        <div className="bg-white rounded-[3rem] border-2 border-slate-100 shadow-2xl overflow-hidden animate-in slide-in-from-bottom-6 duration-500">
-          <div className="px-10 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-            <div className="flex items-center gap-3">
-               <div className="w-2 h-2 bg-blue-600 rounded-full animate-ping"></div>
-               <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest italic">Analyse IA : {activeTask}</h3>
-            </div>
-            <button onClick={() => setAiResult(null)} className="text-slate-300 hover:text-slate-900 transition-colors">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
-          </div>
-          <div className="p-10 md:p-16">
-            {loading ? (
-              <div className="flex flex-col items-center justify-center py-20 gap-6">
-                <div className="w-16 h-16 border-4 border-blue-50 border-t-blue-600 rounded-full animate-spin"></div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] animate-pulse">Extraction de l'intelligence...</p>
-              </div>
-            ) : (
-              <div className="prose prose-slate max-w-none text-slate-700 font-bold leading-relaxed">
-                {aiResult?.split('\n').map((line, i) => {
-                  const isHeader = line.match(/^[1-4📊🚀⚠️⚡]/);
-                  return (
-                    <p key={i} className={`${isHeader ? 'text-2xl font-black text-slate-900 mt-10 mb-6 border-b pb-4' : 'mb-4 opacity-80 text-lg'}`}>
-                      {line}
-                    </p>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* 5. Top Performance & Client Ranking Table */}
-      <div className="bg-white rounded-[3rem] border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-10 py-8 border-b border-slate-100 flex justify-between items-center">
-          <h3 className="text-xl font-black text-slate-900 uppercase italic">Portfolio Activity</h3>
-          <span className="text-[10px] font-black bg-slate-50 text-slate-400 px-4 py-2 rounded-full uppercase tracking-widest">Classement par Dépense</span>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-b border-slate-50">
-                <th className="px-10 py-6">Client</th>
-                <th className="px-10 py-6">Campagnes</th>
-                <th className="px-10 py-6 text-right">Dépense Totale</th>
-                <th className="px-10 py-6 text-right">Conversions</th>
-                <th className="px-10 py-6 text-right">Cost Moyen</th>
-                <th className="px-10 py-6 text-right">Statut IA</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {clients.map(client => {
-                const clientCampaigns = campaigns.filter(c => client.campaignIds.includes(c.campaignId));
-                const spend = clientCampaigns.reduce((s, c) => s + (c.spend || 0), 0);
-                const convs = clientCampaigns.reduce((s, c) => s + (c.conversions || 0), 0);
-                const cpa = convs > 0 ? spend / convs : 0;
-                
-                return (
-                  <tr key={client.id} className="hover:bg-slate-50/50 transition-all group">
-                    <td className="px-10 py-6">
-                      <div className="font-black text-slate-900 uppercase italic group-hover:text-blue-600 transition-colors">{client.name}</div>
-                      <div className="text-[9px] font-bold text-slate-400 mt-0.5">{client.email}</div>
-                    </td>
-                    <td className="px-10 py-6">
-                      <span className="text-xs font-black text-slate-600 bg-slate-100 px-3 py-1 rounded-lg">{clientCampaigns.length}</span>
-                    </td>
-                    <td className="px-10 py-6 text-right font-black text-slate-900 tabular-nums">{format(spend)}</td>
-                    <td className="px-10 py-6 text-right font-black text-blue-600 tabular-nums">{convs}</td>
-                    <td className="px-10 py-6 text-right font-black text-emerald-600 tabular-nums">{format(cpa, 'USD', 2)}</td>
-                    <td className="px-10 py-6 text-right">
-                       <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block shadow-[0_0_10px_rgba(16,185,129,0.5)]"></span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
         </div>
       </div>
     </div>
