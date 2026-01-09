@@ -1,9 +1,9 @@
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Client, CampaignStats, IntegrationSecret } from '../types';
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
-  ResponsiveContainer, Cell, AreaChart, Area, ComposedChart, Line, Legend
+  XAxis, YAxis, CartesianGrid, Tooltip, 
+  ResponsiveContainer, AreaChart, Area, ComposedChart, Line, Legend
 } from 'recharts';
 import { getCampaignInsights, getCopywritingSuggestions, getAnomalyDetection } from '../services/geminiService';
 import { useCurrency } from '../contexts/CurrencyContext';
@@ -37,6 +37,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ clients, campaigns, sec
       clientCount: clients.length
     };
   }, [campaigns, clients]);
+
+  // Dernier refresh basé sur la campagne la plus récente
+  const lastUpdate = useMemo(() => {
+    if (campaigns.length === 0) return null;
+    const dates = campaigns.map(c => c.lastSync ? new Date(c.lastSync).getTime() : 0);
+    return new Date(Math.max(...dates));
+  }, [campaigns]);
 
   // 2. Données pour le graphique de performance agrégée
   const performanceTrend = useMemo(() => {
@@ -91,13 +98,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ clients, campaigns, sec
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
         <div>
           <h2 className="text-4xl font-black text-slate-900 tracking-tighter uppercase italic">Control Room</h2>
-          <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1 flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            AdiVision Matrix • {platformStats.clientCount} Flux de données actifs
-          </p>
+          <div className="flex items-center gap-3 mt-1">
+            <div className="flex items-center gap-2 bg-slate-900 text-white px-3 py-1 rounded-lg">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]"></span>
+              <p className="text-[10px] font-black uppercase tracking-widest italic">Live Heartbeat Active</p>
+            </div>
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">
+              {platformStats.clientCount} Flux • MAJ {lastUpdate ? lastUpdate.toLocaleTimeString() : '...'}
+            </p>
+          </div>
         </div>
         
-        <div className="flex gap-4 w-full lg:w-auto">
+        <div className="flex gap-4 w-full lg:w-auto overflow-x-auto pb-2 lg:pb-0">
           <StatusCard label="META API" active={getApiStatus('FACEBOOK')} />
           <StatusCard label="GEMINI IA" active={getApiStatus('AI')} />
           <StatusCard label="SYNC CLOUD" active={true} />
@@ -109,17 +121,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ clients, campaigns, sec
         <MacroKPI label="Managed Portfolio" value={format(platformStats.totalSpend)} sub="Dépense Totale Gérée" color="slate" />
         <MacroKPI label="Global Results" value={platformStats.totalConversions.toLocaleString()} sub="Toutes Campagnes" color="purple" />
         <MacroKPI label="Global CPA" value={format(platformStats.avgCPA, 'USD', 2)} sub="Moyenne Plateforme" color="emerald" />
-        <MacroKPI label="Active Nodes" value={platformStats.activeCampaigns.toString()} sub="Flux de Données Temps Réel" color="blue" />
+        <MacroKPI label="Active Nodes" value={platformStats.activeCampaigns.toString()} sub="Flux Temps Réel" color="blue" />
       </div>
 
       {/* 3. Global Analytics Matrix & AI Console */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-        {/* Performance Chart */}
-        <div className="xl:col-span-2 bg-white rounded-[3rem] p-10 border border-slate-200 shadow-xl space-y-8">
+        <div className="xl:col-span-2 bg-white rounded-[3rem] p-6 md:p-10 border border-slate-200 shadow-xl space-y-8">
           <div className="flex justify-between items-center">
             <div>
               <h3 className="text-xl font-black text-slate-900 uppercase italic tracking-tight">Performance Matrix</h3>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2">Corrélation Plateforme : Coût / Résultat (Émeraude) vs Volume (Violet)</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2">Corrélation Plateforme : CPA (Émeraude) vs Volume (Violet)</p>
             </div>
           </div>
           <div className="h-[350px] w-full">
@@ -165,14 +176,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ clients, campaigns, sec
                   dataKey="cpa" 
                   stroke="#10b981" 
                   strokeWidth={4} 
-                  dot={{r: 4, fill: '#10b981'}} 
+                  dot={{r: 4, fill: '#10b981', strokeWidth: 2, stroke: '#fff'}} 
                 />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* AI Lab Side Control */}
         <div className="xl:col-span-1 bg-slate-900 rounded-[3rem] p-8 text-white shadow-2xl flex flex-col relative overflow-hidden">
           <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/10 blur-[60px] rounded-full"></div>
           <h3 className="text-xl font-black italic uppercase tracking-tighter mb-8 flex items-center gap-3">
@@ -213,16 +223,16 @@ const MacroKPI = ({ label, value, sub, color }: any) => {
     slate: 'border-slate-200 bg-white text-slate-900'
   };
   return (
-    <div className={`p-8 rounded-[2.5rem] border-2 flex flex-col justify-center shadow-sm ${themes[color]}`}>
+    <div className={`p-6 md:p-8 rounded-2xl md:rounded-[2.5rem] border-2 flex flex-col justify-center shadow-sm transition-all hover:scale-[1.02] ${themes[color]}`}>
       <p className="text-[9px] font-black uppercase tracking-widest opacity-60 mb-2">{label}</p>
-      <p className="text-3xl font-black tracking-tighter tabular-nums truncate">{value}</p>
+      <p className="text-xl md:text-3xl font-black tracking-tighter tabular-nums truncate">{value}</p>
       <p className="text-[9px] font-bold uppercase tracking-widest opacity-40 mt-1">{sub}</p>
     </div>
   );
 };
 
 const StatusCard = ({ label, active }: { label: string, active: boolean }) => (
-  <div className="flex items-center gap-3 bg-white px-5 py-3 rounded-2xl border border-slate-200 shadow-sm">
+  <div className="flex items-center gap-3 bg-white px-5 py-3 rounded-2xl border border-slate-200 shadow-sm whitespace-nowrap">
     <div className={`w-2 h-2 rounded-full ${active ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]' : 'bg-red-500 animate-pulse'}`}></div>
     <span className="text-[9px] font-black text-slate-900 uppercase tracking-widest">{label}</span>
   </div>
@@ -230,9 +240,9 @@ const StatusCard = ({ label, active }: { label: string, active: boolean }) => (
 
 const AgentBtn = ({ label, onClick, active, icon, color }: any) => {
   const colors: any = {
-    purple: active ? 'bg-purple-600 text-white border-purple-600' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10',
-    amber: active ? 'bg-amber-500 text-white border-amber-500' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10',
-    default: active ? 'bg-blue-600 text-white border-blue-600' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
+    purple: active ? 'bg-purple-600 text-white border-purple-600 shadow-lg shadow-purple-500/20' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10',
+    amber: active ? 'bg-amber-500 text-white border-amber-500 shadow-lg shadow-amber-500/20' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10',
+    default: active ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-500/20' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
   };
   return (
     <button onClick={onClick} className={`w-full py-5 px-6 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-between border ${colors[color] || colors.default}`}>

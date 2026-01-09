@@ -56,7 +56,10 @@ const Layout: React.FC<LayoutProps> = ({
     const now = Date.now();
     if (!navigator.onLine || !setCampaigns) return;
     if (!force && isSyncing) return;
-    if (!force && (now - lastSyncTimeRef.current < 30000)) return;
+    
+    // Fréquence : 30s si forcé, sinon 60s pour admin, 120s pour client
+    const minInterval = force ? 30000 : (user.role === UserRole.ADMIN ? 60000 : 120000);
+    if (!force && (now - lastSyncTimeRef.current < minInterval)) return;
     
     const fbSecret = secrets.find(s => s.type === 'FACEBOOK');
     if (!fbSecret || fbSecret.status !== 'VALID') return;
@@ -74,7 +77,9 @@ const Layout: React.FC<LayoutProps> = ({
 
       for (const client of sortedClients) {
         if (!client.campaignIds || client.campaignIds.length === 0) continue;
-        if (force && client.id !== activeId && activeId !== undefined) continue;
+        // Pour l'admin sur le Dashboard Global, on veut tout synchroniser, donc on ne filtre pas si urlClientId est undefined
+        if (force && user.role === UserRole.ADMIN && urlClientId && client.id !== urlClientId) continue;
+        if (force && user.role === UserRole.CLIENT && client.id !== user.clientId) continue;
 
         for (const adAccountId of (client.adAccounts || [])) {
           try {
@@ -148,20 +153,22 @@ const Layout: React.FC<LayoutProps> = ({
     } finally {
       setIsSyncing(false);
     }
-  }, [clients, secrets, setCampaigns, urlClientId, user.clientId, user.role]);
+  }, [clients, secrets, setCampaigns, urlClientId, user.clientId, user.role, isSyncing]);
 
   useEffect(() => {
-    if (location.pathname.includes('dashboard')) {
+    // Déclenchement sur Dashboard Client OU Control Room Admin (/)
+    if (location.pathname === '/' || location.pathname.includes('dashboard')) {
       runGlobalSync(true); 
     }
-    // Fermer le menu mobile lors du changement de page
     setIsMobileMenuOpen(false);
   }, [location.pathname, runGlobalSync]);
 
   useEffect(() => {
-    const interval = setInterval(() => runGlobalSync(), 120000);
+    // Intervalle plus court pour l'admin (60s) vs Client (120s)
+    const intervalTime = user.role === UserRole.ADMIN ? 60000 : 120000;
+    const interval = setInterval(() => runGlobalSync(), intervalTime);
     return () => clearInterval(interval);
-  }, [runGlobalSync]);
+  }, [runGlobalSync, user.role]);
 
   const activeClient = useMemo(() => {
     const id = user.role === UserRole.ADMIN ? urlClientId : user.clientId;
@@ -176,10 +183,8 @@ const Layout: React.FC<LayoutProps> = ({
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50">
-      {/* Sidebar Desktop */}
       <Sidebar user={user} onLogout={onLogout} />
 
-      {/* Menu Mobile Drawer */}
       {isMobileMenuOpen && (
         <div className="fixed inset-0 z-[100] lg:hidden">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setIsMobileMenuOpen(false)}></div>
