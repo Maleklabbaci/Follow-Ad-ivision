@@ -38,6 +38,12 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns = [],
     return campaigns.filter(c => c && ids.includes(c.campaignId));
   }, [campaigns, activeClient]);
 
+  const lastSyncDate = useMemo(() => {
+    if (clientCampaigns.length === 0) return null;
+    const dates = clientCampaigns.map(c => c.lastSync ? new Date(c.lastSync).getTime() : 0);
+    return new Date(Math.max(...dates));
+  }, [clientCampaigns]);
+
   const totals = useMemo(() => {
     return clientCampaigns.reduce((acc, c) => ({
       spend: acc.spend + (c.spend || 0),
@@ -111,11 +117,6 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns = [],
         }
       }
 
-      if (historyMap.size === 0) {
-        setRealHistoryData(generateHistoryFromDashboard());
-        return;
-      }
-
       const formatted = Array.from(historyMap.entries())
         .map(([date, vals]) => ({
             date: new Date(date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }),
@@ -126,9 +127,8 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns = [],
         }))
         .sort((a, b) => a.fullDate.localeCompare(b.fullDate));
 
-      setRealHistoryData(formatted);
+      setRealHistoryData(formatted.length > 0 ? formatted : generateHistoryFromDashboard());
     } catch (err) {
-      console.error(err);
       setRealHistoryData(generateHistoryFromDashboard());
     }
   }, [clientCampaigns, secrets, totals]);
@@ -140,10 +140,6 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns = [],
     }
   }, [activeClient, fetchRealHistory]);
 
-  const globalCost = totals.results > 0 ? (totals.spend / totals.results) : 0;
-  const globalCtr = totals.impressions > 0 ? (totals.clicks / totals.impressions * 100).toFixed(2) : '0.00';
-  const globalCpm = totals.impressions > 0 ? (totals.spend / totals.impressions) * 1000 : 0;
-
   const pulseScore = useMemo(() => {
     if (realHistoryData.length < 2) return 50;
     const lastHalf = realHistoryData.slice(-7);
@@ -152,8 +148,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns = [],
     const prevRes = prevHalf.reduce((s, d) => s + (d.resultat || 0), 0);
     if (prevRes === 0) return lastRes > 0 ? 80 : 40;
     const trend = (lastRes / prevRes);
-    let score = trend * 50;
-    return Math.min(Math.max(Math.round(score), 10), 98);
+    return Math.min(Math.max(Math.round(trend * 50), 10), 98);
   }, [realHistoryData]);
 
   return (
@@ -161,13 +156,22 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns = [],
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
         <div>
           <h2 className="text-xl md:text-3xl font-black text-slate-900 tracking-tighter italic uppercase">{activeClient?.name}</h2>
-          <p className="text-slate-500 text-[9px] md:text-xs font-bold uppercase tracking-widest mt-1">
-            {activeClient?.email} • Marketing Node Active
-          </p>
+          <div className="flex items-center gap-2 mt-1">
+            <p className="text-slate-500 text-[9px] md:text-xs font-bold uppercase tracking-widest">
+              {activeClient?.email} • Global Insights Verified
+            </p>
+          </div>
         </div>
-        <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm">
-           <div className={`w-2 h-2 rounded-full ${isRefreshing ? 'bg-blue-500 animate-ping' : 'bg-emerald-500'}`}></div>
-           <span className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Live Sync</span>
+        <div className="flex flex-col items-end gap-1">
+          <div className="flex items-center gap-2 bg-emerald-50 px-4 py-2 rounded-xl border border-emerald-100 shadow-sm">
+             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+             <span className="text-[10px] font-black text-emerald-700 uppercase tracking-widest">Meta API v19.0 Active</span>
+          </div>
+          {lastSyncDate && (
+            <span className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">
+              Mis à jour : {lastSyncDate.toLocaleTimeString()}
+            </span>
+          )}
         </div>
       </div>
 
@@ -175,9 +179,9 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns = [],
         <KPIBox label="Dépense" value={format(totals.spend)} color="white" />
         <KPIBox label="Portée" value={totals.reach.toLocaleString()} color="blue" />
         <KPIBox label="Résultats" value={totals.results.toLocaleString()} color="purple" />
-        <KPIBox label="Cost" value={format(globalCost, 'USD', 2)} color="emerald" />
-        <KPIBox label="CTR Global" value={`${globalCtr}%`} color="indigo" />
-        <KPIBox label="CPM" value={format(globalCpm)} color="slate" />
+        <KPIBox label="Cost" value={format(totals.results > 0 ? totals.spend / totals.results : 0, 'USD', 2)} color="emerald" />
+        <KPIBox label="CTR Global" value={`${totals.impressions > 0 ? (totals.clicks / totals.impressions * 100).toFixed(2) : '0.00'}%`} color="indigo" />
+        <KPIBox label="CPM" value={format(totals.impressions > 0 ? (totals.spend / totals.impressions) * 1000 : 0)} color="slate" />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -185,7 +189,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns = [],
           <div className="flex justify-between items-start">
             <div>
               <h3 className="text-xl font-black text-slate-900 uppercase italic tracking-tight leading-none">Performance Matrix</h3>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2">Dépenses vs Résultats (Données réelles extraites par jour)</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2">Dépenses vs Résultats (Données extraites en temps réel)</p>
             </div>
             
             <div className="flex flex-col items-center">
@@ -193,10 +197,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns = [],
                  <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
-                        data={[
-                          { value: pulseScore },
-                          { value: 100 - pulseScore }
-                        ]}
+                        data={[{ value: pulseScore }, { value: 100 - pulseScore }]}
                         innerRadius={25}
                         outerRadius={35}
                         startAngle={180}
@@ -241,32 +242,9 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns = [],
                   cursor={{stroke: '#e2e8f0', strokeWidth: 2}}
                   contentStyle={{borderRadius: '20px', border: 'none', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)', padding: '15px'}}
                   labelStyle={{fontWeight: 'black', textTransform: 'uppercase', fontSize: '10px', color: '#64748b', marginBottom: '5px'}}
-                  formatter={(value: any, name: string) => {
-                    if (name === 'spend') return [format(value), 'Dépense'];
-                    if (name === 'resultat') return [value, 'Résultats'];
-                    return [value, name];
-                  }}
                 />
-                <Area 
-                  name="spend"
-                  type="monotone" 
-                  dataKey="spend" 
-                  stroke="#2563eb" 
-                  strokeWidth={4} 
-                  fillOpacity={1} 
-                  fill="url(#colorSpend)" 
-                  animationDuration={1500}
-                />
-                <Line 
-                  name="resultat"
-                  type="monotone" 
-                  dataKey="resultat" 
-                  stroke="#10b981" 
-                  strokeWidth={4} 
-                  dot={{r: 4, fill: '#10b981', strokeWidth: 2, stroke: '#fff'}} 
-                  activeDot={{r: 6, strokeWidth: 0}}
-                  animationDuration={1500}
-                />
+                <Area name="spend" type="monotone" dataKey="spend" stroke="#2563eb" strokeWidth={4} fillOpacity={1} fill="url(#colorSpend)" />
+                <Line name="resultat" type="monotone" dataKey="resultat" stroke="#10b981" strokeWidth={4} dot={{r: 4, fill: '#10b981', strokeWidth: 2, stroke: '#fff'}} />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
@@ -278,40 +256,6 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns = [],
               campaigns={campaigns} 
               secrets={secrets} 
             />
-        </div>
-      </div>
-
-      <div className="bg-white rounded-2xl md:rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-6 py-5 md:p-10 border-b border-slate-100 flex justify-between items-center bg-slate-50/20">
-          <h3 className="text-sm md:text-2xl font-black text-slate-800 tracking-tight italic uppercase">Registre Campagnes Meta</h3>
-          <span className="text-[9px] font-black bg-slate-100 text-slate-400 px-4 py-2 rounded-full uppercase tracking-widest">Total: {clientCampaigns.length} flux</span>
-        </div>
-        <div className="overflow-x-auto custom-scrollbar">
-          <table className="w-full text-left min-w-[600px]">
-            <thead>
-              <tr className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] border-b border-slate-100">
-                <th className="px-6 md:px-10 py-6">Campagne</th>
-                <th className="px-6 md:px-10 py-6 text-right">Dépense</th>
-                <th className="px-6 md:px-10 py-6 text-right">Résultats</th>
-                <th className="px-6 md:px-10 py-6 text-right">Cost</th>
-                <th className="px-6 md:px-10 py-6 text-right">CTR%</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {clientCampaigns.map(cp => (
-                <tr key={cp.id} className="hover:bg-slate-50/50 transition-all group">
-                  <td className="px-6 md:px-10 py-6">
-                    <div className="font-black text-slate-900 text-xs md:text-sm uppercase italic">{cp.name}</div>
-                    <div className="text-[8px] font-bold text-slate-400 mt-1 uppercase tracking-widest">ID: {cp.campaignId}</div>
-                  </td>
-                  <td className="px-6 md:px-10 py-6 text-right font-black text-slate-900 text-xs tabular-nums">{format(cp.spend)}</td>
-                  <td className="px-6 md:px-10 py-6 text-right font-black text-purple-600 text-xs tabular-nums">{cp.results || 0}</td>
-                  <td className="px-6 md:px-10 py-6 text-right font-black text-emerald-600 text-xs tabular-nums">{format(cp.cost_per_result || (cp.results > 0 ? cp.spend / cp.results : 0), 'USD', 2)}</td>
-                  <td className="px-6 md:px-10 py-6 text-right font-black text-sm text-slate-400 tabular-nums">{(cp.ctr * 100).toFixed(2)}%</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       </div>
     </div>
