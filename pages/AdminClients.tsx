@@ -37,7 +37,8 @@ const AdminClients: React.FC<AdminClientsProps> = ({ clients, setClients, users,
       const emailPrefix = val.toLowerCase()
         .normalize("NFD").replace(/[\u0300-\u036f]/g, "") 
         .replace(/[^a-z0-9]/g, '');
-      setNewClientEmail(`${emailPrefix}@ivison.com`);
+      // Mise à jour du domaine par défaut vers @ivision.com
+      setNewClientEmail(`${emailPrefix}@ivision.com`);
       
       if (!newClientPassword) {
         setNewClientPassword(`${emailPrefix}2025!`);
@@ -83,7 +84,7 @@ const AdminClients: React.FC<AdminClientsProps> = ({ clients, setClients, users,
       setNewClientName('');
       setNewClientEmail('');
       setNewClientPassword('');
-      alert(`SUCCÈS : Le client "${newClientName}" a été créé.`);
+      alert(`SUCCÈS : Le client "${newClientName}" a été créé sur AdiVision.`);
     } catch (err: any) {
       alert(`ERREUR CLOUD : ${err.message || "Problème de synchronisation Supabase"}`);
     } finally {
@@ -173,7 +174,7 @@ const AdminClients: React.FC<AdminClientsProps> = ({ clients, setClients, users,
           <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight uppercase italic">Clients</h2>
           <div className="flex items-center gap-2 mt-1">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
-            <p className="text-slate-500 font-bold uppercase tracking-widest text-[8px] md:text-[9px]">SaaS Cloud Sync : ONLINE</p>
+            <p className="text-slate-500 font-bold uppercase tracking-widest text-[8px] md:text-[9px]">AdiVision Cloud Sync : ONLINE</p>
           </div>
         </div>
         <button

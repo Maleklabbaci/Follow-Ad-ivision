@@ -3,7 +3,7 @@ import { Client, CampaignStats, IntegrationSecret, User, AuditLog, AiReport } fr
 import { supabase } from './supabase';
 
 class DatabaseEngine {
-  private LOCAL_STORAGE_KEY = 'adpulse_local_db';
+  private LOCAL_STORAGE_KEY = 'adivision_local_db';
 
   /**
    * Note: The currency formatting is now handled via the useCurrency hook
@@ -138,10 +138,7 @@ class DatabaseEngine {
   }
 
   async saveCampaigns(campaigns: CampaignStats[]) {
-    // Sanitize data for Supabase: remove calculated/extra fields that might not be in the remote DB schema.
-    // This prevents PostgREST "Could not find column" errors like the 'cost' column error.
     const dbCampaigns = campaigns.map(cp => {
-      // Explicitly remove fields that are typically calculated on the fly or might not exist in the table schema
       const { 
         cost, 
         results, 
@@ -156,8 +153,6 @@ class DatabaseEngine {
         auditLogs,
         ...coreFields 
       } = cp as any;
-      
-      // We only send the persistent core fields to the cloud
       return coreFields;
     });
 
@@ -167,7 +162,6 @@ class DatabaseEngine {
     } catch (supabaseError: any) {
       console.warn("Supabase upsert failure (likely schema mismatch):", supabaseError.message);
     } finally {
-      // ALWAYS persist the full-featured objects locally for high-fidelity UI rendering and offline access
       const current = this.getLocalData() || {};
       this.saveLocalData({ ...current, campaigns });
     }

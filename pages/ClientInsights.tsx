@@ -18,10 +18,11 @@ const ClientInsights: React.FC<ClientInsightsProps> = ({ user, campaigns = [], s
 
   const clientCampaigns = useMemo(() => {
     if (!user?.clientId) return [];
-    const savedClientsRaw = localStorage.getItem('adpulse_local_db');
+    // Utilisation de la clé de base AdiVision
+    const savedDataRaw = localStorage.getItem('adivision_local_db');
     let clientCampaignIds: string[] = [];
     try {
-      const db = JSON.parse(savedClientsRaw || '{}');
+      const db = JSON.parse(savedDataRaw || '{}');
       const allClients = db.clients || [];
       const currentClient = allClients.find((c: Client) => c.id === user.clientId);
       clientCampaignIds = currentClient?.campaignIds || [];
@@ -59,7 +60,7 @@ const ClientInsights: React.FC<ClientInsightsProps> = ({ user, campaigns = [], s
         </div>
         <div>
           <h2 className="text-2xl font-black text-slate-900 tracking-tight uppercase italic">Audit Stratégique IA</h2>
-          <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-2">Décisions basées sur la donnée réelle.</p>
+          <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-2">Décisions basées sur la donnée réelle AdiVision.</p>
         </div>
 
         <div className="grid grid-cols-3 gap-2 w-full max-w-[240px]">
@@ -100,11 +101,8 @@ const ClientInsights: React.FC<ClientInsightsProps> = ({ user, campaigns = [], s
                   {insights?.split('\n').map((line, i) => {
                     const trimmed = line.trim();
                     if (!trimmed) return <div key={i} className="h-4" />;
-
-                    // Header detection
                     const isHeading = trimmed.match(/^[1234]\.|\d\./) || trimmed.match(/^[📊🚀⚠️⚡]/);
                     const isListItem = trimmed.startsWith('-') || trimmed.startsWith('•');
-
                     return (
                       <div key={i} className={`
                         ${isHeading ? 'text-lg md:text-xl font-black text-slate-900 mt-6 md:mt-10 mb-4 md:mb-6 flex items-center gap-2 border-b border-slate-100 pb-2' : ''}

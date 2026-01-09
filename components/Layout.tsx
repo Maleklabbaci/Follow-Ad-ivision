@@ -4,7 +4,7 @@ import { Outlet, useLocation, useParams, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { User, Client, UserRole, IntegrationSecret, CampaignStats } from '../types';
 import { useCurrency } from '../contexts/CurrencyContext';
-import AdPulseChatbot from './AdPulseChatbot';
+import AdiVisionChatbot from './AdiVisionChatbot';
 import { decryptSecret } from '../services/cryptoService';
 import { DB } from '../services/db';
 
@@ -52,14 +52,11 @@ const Layout: React.FC<LayoutProps> = ({
     };
   }, []);
 
-  // LOGIQUE DE SYNCHRONISATION AUTOMATIQUE ET INTELLIGENTE
   const runGlobalSync = useCallback(async (force = false) => {
-    // Éviter les syncs trop rapprochées (moins de 30s) sauf si forcé
     const now = Date.now();
+    if (!navigator.onLine || !setCampaigns) return;
     if (!force && isSyncing) return;
     if (!force && (now - lastSyncTimeRef.current < 30000)) return;
-    
-    if (!navigator.onLine || !setCampaigns || clients.length === 0) return;
     
     const fbSecret = secrets.find(s => s.type === 'FACEBOOK');
     if (!fbSecret || fbSecret.status !== 'VALID') return;
@@ -67,18 +64,18 @@ const Layout: React.FC<LayoutProps> = ({
     setIsSyncing(true);
     try {
       const token = await decryptSecret(fbSecret.value);
-      if (!token) throw new Error("Token Meta absent");
+      if (!token) throw new Error("Token Meta invalide");
 
       let newCampaignsMap = new Map<string, CampaignStats>();
       campaignsRef.current.forEach(c => newCampaignsMap.set(c.campaignId, c));
 
-      // Prioriser le client actuellement visualisé si on est sur un dashboard
       const activeId = user.role === UserRole.ADMIN ? urlClientId : user.clientId;
       const sortedClients = [...clients].sort((a, b) => (a.id === activeId ? -1 : 1));
 
       for (const client of sortedClients) {
         if (!client.campaignIds || client.campaignIds.length === 0) continue;
-        
+        if (force && client.id !== activeId && activeId !== undefined) continue;
+
         for (const adAccountId of (client.adAccounts || [])) {
           try {
             const url = `https://graph.facebook.com/v19.0/${adAccountId}/campaigns?fields=name,status,id,account_id,insights.date_preset(maximum){spend,impressions,reach,frequency,clicks,actions}&access_token=${token}`;
@@ -99,7 +96,9 @@ const Layout: React.FC<LayoutProps> = ({
                   let conversionsCount = 0;
                   if (insight.actions) {
                     const targetActions = insight.actions.filter((a: any) => 
-                      a.action_type.includes('messaging_conversation_started') || a.action_type === 'conversions'
+                      a.action_type.includes('messaging_conversation_started') || 
+                      a.action_type === 'conversions' ||
+                      a.action_type.includes('purchase')
                     );
                     conversionsCount = targetActions.reduce((sum: number, a: any) => sum + parseInt(a.value), 0);
                   }
@@ -120,6 +119,7 @@ const Layout: React.FC<LayoutProps> = ({
                     clicks,
                     conversions: conversionsCount, 
                     results: conversionsCount,
+                    resultat: conversionsCount,
                     cost: spend,
                     cost_per_result: cpa,
                     ctr: impressions > 0 ? (clicks / impressions) : 0,
@@ -133,7 +133,7 @@ const Layout: React.FC<LayoutProps> = ({
                 }
               });
             }
-          } catch (e) { /* silent fail for single account */ }
+          } catch (e) { }
         }
       }
 
@@ -150,13 +150,12 @@ const Layout: React.FC<LayoutProps> = ({
     }
   }, [clients, secrets, setCampaigns, urlClientId, user.clientId, user.role]);
 
-  // Déclencher systématiquement à chaque changement de page majeur (Dashboard Client)
   useEffect(() => {
-    const isDashboard = location.pathname.includes('dashboard');
-    runGlobalSync(isDashboard); // On force si c'est un dashboard pour garantir l'instantanéité
+    if (location.pathname.includes('dashboard')) {
+      runGlobalSync(true); 
+    }
   }, [location.pathname, runGlobalSync]);
 
-  // Interval de fond toutes les 2 min
   useEffect(() => {
     const interval = setInterval(() => runGlobalSync(), 120000);
     return () => clearInterval(interval);
@@ -190,7 +189,7 @@ const Layout: React.FC<LayoutProps> = ({
                <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full border transition-all duration-500 ${isSyncing ? 'bg-blue-50 border-blue-100 text-blue-600' : 'bg-emerald-50 border-emerald-100 text-emerald-600'}`}>
                   <div className={`w-1.5 h-1.5 rounded-full ${isSyncing ? 'bg-blue-500 animate-spin' : 'bg-emerald-500 animate-pulse'}`}></div>
                   <span className="text-[8px] font-black uppercase tracking-widest">
-                    {isSyncing ? 'Refreshing Engine' : 'Live Stream'}
+                    {isSyncing ? 'Syncing Meta...' : 'Live Stream'}
                   </span>
                </div>
             </div>
@@ -213,7 +212,7 @@ const Layout: React.FC<LayoutProps> = ({
         </main>
       </div>
 
-      <AdPulseChatbot secrets={secrets} campaigns={contextualCampaigns} activeClientName={activeClient?.name} />
+      <AdiVisionChatbot secrets={secrets} campaigns={contextualCampaigns} activeClientName={activeClient?.name} />
     </div>
   );
 };

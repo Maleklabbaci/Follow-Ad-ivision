@@ -3,7 +3,7 @@ import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { User, CampaignStats, Client, UserRole, IntegrationSecret } from '../types';
 import { decryptSecret } from '../services/cryptoService';
-import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, Line, Area, PieChart, Pie, Cell } from 'recharts';
+import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, Line, Area } from 'recharts';
 import ClientInsights from './ClientInsights';
 import { useCurrency } from '../contexts/CurrencyContext';
 
@@ -140,17 +140,6 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns = [],
     }
   }, [activeClient, fetchRealHistory]);
 
-  const pulseScore = useMemo(() => {
-    if (realHistoryData.length < 2) return 50;
-    const lastHalf = realHistoryData.slice(-7);
-    const prevHalf = realHistoryData.slice(-14, -7);
-    const lastRes = lastHalf.reduce((s, d) => s + (d.resultat || 0), 0);
-    const prevRes = prevHalf.reduce((s, d) => s + (d.resultat || 0), 0);
-    if (prevRes === 0) return lastRes > 0 ? 80 : 40;
-    const trend = (lastRes / prevRes);
-    return Math.min(Math.max(Math.round(trend * 50), 10), 98);
-  }, [realHistoryData]);
-
   return (
     <div className="space-y-6 md:space-y-8 animate-in fade-in duration-500 pb-12">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
@@ -190,33 +179,6 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns = [],
             <div>
               <h3 className="text-xl font-black text-slate-900 uppercase italic tracking-tight leading-none">Performance Matrix</h3>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2">Dépenses vs Résultats (Données extraites en temps réel)</p>
-            </div>
-            
-            <div className="flex flex-col items-center">
-              <div className="relative w-20 h-20">
-                 <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={[{ value: pulseScore }, { value: 100 - pulseScore }]}
-                        innerRadius={25}
-                        outerRadius={35}
-                        startAngle={180}
-                        endAngle={0}
-                        dataKey="value"
-                        stroke="none"
-                      >
-                        <Cell fill={pulseScore > 70 ? '#10b981' : pulseScore > 40 ? '#f59e0b' : '#ef4444'} />
-                        <Cell fill="#f1f5f9" />
-                      </Pie>
-                    </PieChart>
-                 </ResponsiveContainer>
-                 <div className="absolute inset-0 flex flex-col items-center justify-center pt-4">
-                    <span className={`text-sm font-black leading-none ${pulseScore > 70 ? 'text-emerald-600' : pulseScore > 40 ? 'text-amber-600' : 'text-red-600'}`}>
-                      {pulseScore}%
-                    </span>
-                 </div>
-              </div>
-              <span className="text-[8px] font-black uppercase tracking-tighter -mt-2 opacity-40">Efficiency Pulse</span>
             </div>
           </div>
 

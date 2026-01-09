@@ -9,9 +9,6 @@ export const getGeminiClient = (apiKey?: string) => {
   return new GoogleGenAI({ apiKey: finalKey });
 };
 
-/**
- * Tests the Gemini API connection with a simple prompt.
- */
 export const testGeminiConnection = async (apiKey?: string): Promise<boolean> => {
   try {
     const ai = getGeminiClient(apiKey);
@@ -26,9 +23,6 @@ export const testGeminiConnection = async (apiKey?: string): Promise<boolean> =>
   }
 };
 
-/**
- * AGENT STRATÈGE : Audit structuré ultra-précis
- */
 export const getCampaignInsights = async (
   campaigns: CampaignStats[], 
   apiKey?: string, 
@@ -40,7 +34,7 @@ export const getCampaignInsights = async (
   ).join('\n');
 
   const systemInstructions = {
-    fr: `Tu es un Growth Strategist de classe mondiale. Tes audits sont célèbres pour leur structure rigoureuse.
+    fr: `Tu es un Growth Strategist de classe mondiale travaillant pour AdiVision. Tes audits sont célèbres pour leur structure rigoureuse.
     INTERDICTION : Utiliser du jargon technique (CTR, CPC). Parle de RÉSULTATS.
     
     STRUCTURE OBLIGATOIRE :
@@ -48,9 +42,9 @@ export const getCampaignInsights = async (
     2. 🚀 ACCÉLÉRATEURS : Ce qui fonctionne et doit être "scalé".
     3. ⚠️ FUITES BUDGÉTAIRES : Où l'argent est brûlé inutilement.
     4. ⚡ PROTOCOLE 24H : 3 actions immédiates avec impact financier direct.`,
-    en: `World-class Growth Strategist. Professional, structured audits only. 
+    en: `World-class Growth Strategist for AdiVision. Professional, structured audits only. 
     STRUCTURE: 1. Vitality Check 2. Accelerators 3. Budget Leaks 4. 24h Action Plan.`,
-    ar: `خبير استراتيجي عالمي. تدقيق هيكلي احترافي فقط.
+    ar: `خبير استراتيجي عالمي في AdiVision. تدقيق هيكلي احترافي فقط.
     الهيكل: 1. فحص الحيوية 2. المسرعات 3. تسرب الميزانية 4. خطة عمل 24 ساعة.`
   };
 
@@ -62,9 +56,6 @@ export const getCampaignInsights = async (
   return response.text || "Échec de l'analyse.";
 };
 
-/**
- * AGENT PULSEBOT : Onboarding & Vente + Analyste de Performance
- */
 export const getChatbotResponse = async (
   message: string, 
   history: {role: string, content: string}[], 
@@ -82,12 +73,12 @@ export const getChatbotResponse = async (
     ? `\nCONTEXTE LIVE DES CAMPAGNES (Max 10) :\n${campaigns.slice(0, 10).map(c => `- ${c.name}: ${c.results} résultats, ${c.spend} dépense, statut ${c.status}`).join('\n')}`
     : "\nAucune donnée de campagne active détectée.";
 
-  const systemPrompt = `Tu es PulseBot, l'IA d'AdPulse.
+  const systemPrompt = `Tu es PulseBot, l'IA d'AdiVision.
   TON RÔLE : 
-  1. Expliquer pourquoi AdPulse est meilleur qu'une agence classique (IA, Transparence, Vitesse).
+  1. Expliquer pourquoi AdiVision est meilleur qu'une agence classique (IA, Transparence, Vitesse).
   2. ANALYSER les données spécifiques fournies. ${clientContext}
   
-  RÈGLES D'ISOLATION :
+  RÈGLES d'ISOLATION :
   - Ne mentionne JAMAIS de données d'autres clients.
   - Si activeClientName est défini, adresse-toi à lui ou mentionne que tu analyses ses comptes.
   
@@ -106,29 +97,23 @@ export const getChatbotResponse = async (
   return response.text || "Je suis prêt à vous guider !";
 };
 
-/**
- * AGENT CRÉATIF : Hooks & Copywriting
- */
 export const getCopywritingSuggestions = async (campaigns: CampaignStats[], apiKey?: string): Promise<string> => {
   const ai = getGeminiClient(apiKey);
   const winners = campaigns.filter(c => c.conversions > 0).map(c => c.name).join(', ');
-  const prompt = `Basé sur ces campagnes gagnantes : ${winners}, génère 3 concepts de publicité (Hooks) et 2 textes de vente courts. Style agressif et orienté bénéfice.`;
+  const prompt = `Basé sur ces campagnes gagnantes sur AdiVision : ${winners}, génère 3 concepts de publicité (Hooks) et 2 textes de vente courts. Style agressif et orienté bénéfice.`;
   
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: [{ parts: [{ text: prompt }] }],
-    config: { systemInstruction: "Tu es un Copywriter Direct Response expert en psychologie de vente." }
+    config: { systemInstruction: "Tu es un Copywriter Direct Response expert en psychologie de vente chez AdiVision." }
   });
   return response.text || "Incapable de générer des hooks pour le moment.";
 };
 
-/**
- * AGENT SENTINELLE : Détection d'Anomalies
- */
 export const getAnomalyDetection = async (campaigns: CampaignStats[], apiKey?: string): Promise<string> => {
   const ai = getGeminiClient(apiKey);
   const data = campaigns.map(c => `${c.name}: Spend ${c.spend}, Convs ${c.conversions}`).join('\n');
-  const prompt = `Analyse les anomalies : ${data}. Cherche les dépenses sans conversion ou les chutes de perf. Liste max 3 alertes rouges.`;
+  const prompt = `Analyse les anomalies pour AdiVision : ${data}. Cherche les dépenses sans conversion ou les chutes de perf. Liste max 3 alertes rouges.`;
   
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
