@@ -1,26 +1,45 @@
 
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { Outlet, useLocation, useParams, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { User, Client, UserRole, IntegrationSecret, CampaignStats } from '../types';
 import { useCurrency } from '../contexts/CurrencyContext';
 import AdPulseChatbot from './AdPulseChatbot';
+import { decryptSecret } from '../services/cryptoService';
+import { DB } from '../services/db';
 
 interface LayoutProps {
   user: User;
   onLogout: () => void;
   clients: Client[];
+  setClients?: React.Dispatch<React.SetStateAction<Client[]>>;
   secrets?: IntegrationSecret[];
   campaigns?: CampaignStats[];
+  setCampaigns?: React.Dispatch<React.SetStateAction<CampaignStats[]>>;
 }
 
-const Layout: React.FC<LayoutProps> = ({ user, onLogout, clients, secrets = [], campaigns = [] }) => {
+const Layout: React.FC<LayoutProps> = ({ 
+  user, 
+  onLogout, 
+  clients, 
+  setClients,
+  secrets = [], 
+  campaigns = [],
+  setCampaigns 
+}) => {
   const { clientId: urlClientId } = useParams<{ clientId?: string }>();
   const navigate = useNavigate();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [isSyncing, setIsSyncing] = useState(false);
   const { currency, setCurrency, rates } = useCurrency();
+  
+  // Ref pour éviter les dépendances circulaires dans runGlobalSync
+  const campaignsRef = useRef(campaigns);
+  useEffect(() => {
+    campaignsRef.current = campaigns;
+  }, [campaigns]);
 
   useEffect(() => {
     const handleStatus = () => setIsOnline(navigator.onLine);
@@ -31,6 +50,121 @@ const Layout: React.FC<LayoutProps> = ({ user, onLogout, clients, secrets = [], 
       window.removeEventListener('offline', handleStatus);
     };
   }, []);
+
+  // LOGIQUE DE SYNCHRONISATION GLOBALE SILENCIEUSE
+  const runGlobalSync = useCallback(async () => {
+    if (!navigator.onLine || !setCampaigns || clients.length === 0) return;
+    
+    const fbSecret = secrets.find(s => s.type === 'FACEBOOK');
+    if (!fbSecret || fbSecret.status !== 'VALID') return;
+
+    setIsSyncing(true);
+    try {
+      const token = await decryptSecret(fbSecret.value);
+      if (!token) throw new Error("Token Meta invalide ou vide");
+
+      let newCampaignsMap = new Map<string, CampaignStats>();
+      
+      // On garde une trace des campagnes existantes pour ne pas perdre les données locales
+      campaignsRef.current.forEach(c => newCampaignsMap.set(c.campaignId, c));
+
+      // On boucle sur tous les clients pour rafraîchir les données
+      for (const client of clients) {
+        if (!client.campaignIds || client.campaignIds.length === 0) continue;
+        
+        for (const adAccountId of (client.adAccounts || [])) {
+          try {
+            const url = `https://graph.facebook.com/v19.0/${adAccountId}/campaigns?fields=name,status,id,account_id,insights.date_preset(maximum){spend,impressions,reach,frequency,clicks,actions}&access_token=${token}`;
+            const res = await fetch(url);
+            if (!res.ok) {
+              const errData = await res.json().catch(() => ({}));
+              console.warn(`Meta API Error for account ${adAccountId}:`, errData.error?.message || res.statusText);
+              continue;
+            }
+            const data = await res.json();
+
+            if (data.data) {
+              data.data.forEach((metaCp: any) => {
+                if (client.campaignIds.includes(metaCp.id)) {
+                  if (metaCp.status === 'DELETED') return;
+                  
+                  const insight = metaCp.insights?.data?.[0] || {};
+                  const spend = parseFloat(insight.spend) || 0;
+                  const impressions = parseInt(insight.impressions) || 0;
+                  const clicks = parseInt(insight.clicks) || 0;
+                  
+                  let conversionsCount = 0;
+                  if (insight.actions) {
+                    const targetActions = insight.actions.filter((a: any) => 
+                      a.action_type.includes('messaging_conversation_started') || a.action_type === 'conversions'
+                    );
+                    conversionsCount = targetActions.reduce((sum: number, a: any) => sum + parseInt(a.value), 0);
+                  }
+
+                  const existing = newCampaignsMap.get(metaCp.id);
+                  
+                  // Calcul des métriques de base
+                  const ctr = impressions > 0 ? (clicks / impressions) : 0;
+                  const cpc = clicks > 0 ? (spend / clicks) : 0;
+                  const cpm = impressions > 0 ? (spend / impressions) * 1000 : 0;
+                  const cpa = conversionsCount > 0 ? (spend / conversionsCount) : 0;
+
+                  const stats: CampaignStats = {
+                    ...existing,
+                    id: existing?.id || `meta_${Math.random().toString(36).substr(2, 5)}`,
+                    campaignId: metaCp.id,
+                    name: metaCp.name,
+                    date: existing?.date || new Date().toISOString().split('T')[0],
+                    spend,
+                    impressions,
+                    reach: parseInt(insight.reach) || 0,
+                    frequency: parseFloat(insight.frequency) || 1,
+                    clicks,
+                    conversions: conversionsCount, 
+                    resultat: conversionsCount,
+                    results: conversionsCount,
+                    cost: spend,
+                    cost_per_result: cpa,
+                    ctr,
+                    cpc,
+                    cpm,
+                    cpa,
+                    roas: 0, // Optionnel si non fourni
+                    status: metaCp.status as any,
+                    dataSource: 'REAL_API',
+                    lastSync: new Date().toISOString(),
+                    isValidated: true,
+                    currency: existing?.currency || 'USD'
+                  } as CampaignStats;
+                  newCampaignsMap.set(metaCp.id, stats);
+                }
+              });
+            }
+          } catch (e: any) {
+            console.warn(`Failed to sync account ${adAccountId}:`, e?.message || e);
+          }
+        }
+      }
+
+      const finalCampaigns = Array.from(newCampaignsMap.values());
+      if (finalCampaigns.length > 0) {
+        setCampaigns(finalCampaigns);
+        await DB.saveCampaigns(finalCampaigns);
+      }
+    } catch (err: any) {
+      // Correction de l'affichage de l'erreur [object Object]
+      console.error("Global sync failed:", err?.message || err);
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [clients, secrets, setCampaigns]);
+
+  // Déclencher la sync au montage et à chaque changement de route majeur
+  useEffect(() => {
+    runGlobalSync();
+    const interval = setInterval(runGlobalSync, 120000); // Sync toutes les 2 min
+    return () => clearInterval(interval);
+  }, [location.pathname, runGlobalSync]);
 
   const activeClientId = useMemo(() => {
     if (user.role === UserRole.ADMIN) return urlClientId;
@@ -58,15 +192,14 @@ const Layout: React.FC<LayoutProps> = ({ user, onLogout, clients, secrets = [], 
     <div className="flex h-screen overflow-hidden bg-slate-50">
       <Sidebar user={user} onLogout={onLogout} />
 
-      {/* Mobile Drawer Overlay */}
       {isMobileMenuOpen && (
         <div className="fixed inset-0 z-[60] lg:hidden">
-          <div className="fixed inset-0 bg-[#0f172a]/80 backdrop-blur-sm animate-in fade-in duration-300" onClick={toggleMobileMenu}></div>
-          <div className="fixed inset-y-4 left-4 w-[280px] bg-white rounded-[2rem] shadow-2xl animate-in slide-in-from-left duration-500 overflow-hidden flex flex-col border border-white/10">
-            <div className="flex justify-end p-4 absolute top-2 right-2 z-10">
-              <button onClick={toggleMobileMenu} className="p-2 text-slate-400 hover:text-slate-600 bg-slate-100 rounded-full transition-colors">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={toggleMobileMenu}></div>
+          <div className="fixed inset-y-0 left-0 w-[280px] bg-white shadow-2xl animate-in slide-in-from-left duration-300">
+            <div className="flex justify-end p-4">
+              <button onClick={toggleMobileMenu} className="p-2 text-slate-400 hover:text-slate-600">
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
@@ -89,9 +222,9 @@ const Layout: React.FC<LayoutProps> = ({ user, onLogout, clients, secrets = [], 
           </div>
         )}
 
-        <header className="h-14 md:h-16 bg-white border-b border-slate-100 flex items-center justify-between px-4 md:px-6 shrink-0 z-20">
+        <header className="h-14 md:h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:px-6 shrink-0 z-20">
           <div className="flex items-center gap-2">
-            <button onClick={toggleMobileMenu} className="lg:hidden p-2 -ml-2 text-slate-500 hover:bg-slate-100 rounded-xl transition-colors">
+            <button onClick={toggleMobileMenu} className="lg:hidden p-2 -ml-2 text-slate-500 hover:bg-slate-100 rounded-lg">
               <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
@@ -101,8 +234,10 @@ const Layout: React.FC<LayoutProps> = ({ user, onLogout, clients, secrets = [], 
                 {user.role === 'ADMIN' ? 'Control' : user.name}
                </h1>
                <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full border ${isOnline ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 'bg-red-50 border-red-100 text-red-600'}`}>
-                  <div className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></div>
-                  <span className="text-[8px] font-black uppercase tracking-widest">{isOnline ? 'Live' : 'Cache'}</span>
+                  <div className={`w-1.5 h-1.5 rounded-full ${isOnline ? (isSyncing ? 'bg-blue-500 animate-spin' : 'bg-emerald-500 animate-pulse') : 'bg-red-500'}`}></div>
+                  <span className="text-[8px] font-black uppercase tracking-widest">
+                    {isOnline ? (isSyncing ? 'Syncing' : 'Live') : 'Cache'}
+                  </span>
                </div>
             </div>
           </div>

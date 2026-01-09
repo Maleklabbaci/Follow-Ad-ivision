@@ -138,10 +138,36 @@ class DatabaseEngine {
   }
 
   async saveCampaigns(campaigns: CampaignStats[]) {
+    // Sanitize data for Supabase: remove calculated/extra fields that might not be in the remote DB schema.
+    // This prevents PostgREST "Could not find column" errors like the 'cost' column error.
+    const dbCampaigns = campaigns.map(cp => {
+      // Explicitly remove fields that are typically calculated on the fly or might not exist in the table schema
+      const { 
+        cost, 
+        results, 
+        cost_per_result, 
+        resultat, 
+        ctr, 
+        cpc, 
+        cpm, 
+        cpa, 
+        roas, 
+        conversion_action_type, 
+        auditLogs,
+        ...coreFields 
+      } = cp as any;
+      
+      // We only send the persistent core fields to the cloud
+      return coreFields;
+    });
+
     try {
-      const { error } = await supabase.from('campaigns').upsert(campaigns, { onConflict: 'id' });
+      const { error } = await supabase.from('campaigns').upsert(dbCampaigns, { onConflict: 'id' });
       if (error) throw error;
+    } catch (supabaseError: any) {
+      console.warn("Supabase upsert failure (likely schema mismatch):", supabaseError.message);
     } finally {
+      // ALWAYS persist the full-featured objects locally for high-fidelity UI rendering and offline access
       const current = this.getLocalData() || {};
       this.saveLocalData({ ...current, campaigns });
     }

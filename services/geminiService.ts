@@ -86,7 +86,6 @@ export const getChatbotResponse = async (
   TON RÔLE : 
   1. Expliquer pourquoi AdPulse est meilleur qu'une agence classique (IA, Transparence, Vitesse).
   2. ANALYSER les données spécifiques fournies. ${clientContext}
-  3. SUPPORT HUMAIN : Si l'utilisateur veut parler à un humain ou un expert, propose-lui de nous contacter sur WhatsApp au +213 542 586 904.
   
   RÈGLES D'ISOLATION :
   - Ne mentionne JAMAIS de données d'autres clients.
