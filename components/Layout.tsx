@@ -154,6 +154,8 @@ const Layout: React.FC<LayoutProps> = ({
     if (location.pathname.includes('dashboard')) {
       runGlobalSync(true); 
     }
+    // Fermer le menu mobile lors du changement de page
+    setIsMobileMenuOpen(false);
   }, [location.pathname, runGlobalSync]);
 
   useEffect(() => {
@@ -174,7 +176,28 @@ const Layout: React.FC<LayoutProps> = ({
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50">
+      {/* Sidebar Desktop */}
       <Sidebar user={user} onLogout={onLogout} />
+
+      {/* Menu Mobile Drawer */}
+      {isMobileMenuOpen && (
+        <div className="fixed inset-0 z-[100] lg:hidden">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setIsMobileMenuOpen(false)}></div>
+          <div className="absolute left-0 top-0 bottom-0 w-72 bg-white shadow-2xl animate-in slide-in-from-left duration-300 flex flex-col">
+            <div className="absolute top-4 right-4">
+              <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 text-slate-400 hover:text-slate-900 transition-colors">
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <Sidebar 
+              user={user} 
+              onLogout={() => { onLogout(); setIsMobileMenuOpen(false); }} 
+              isMobile={true} 
+              mobileCallback={() => setIsMobileMenuOpen(false)} 
+            />
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <header className="h-14 md:h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:px-6 shrink-0 z-20">

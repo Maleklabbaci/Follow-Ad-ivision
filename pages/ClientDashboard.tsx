@@ -160,13 +160,13 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, campaigns = [],
         </div>
       </div>
 
-      {/* Main KPI Grid - Updated to lg:grid-cols-6 */}
+      {/* Main KPI Grid - Order: Spend -> Results -> Cost/Result -> Reach -> CTR -> CPM */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4">
+        <KPIBox label="Dépense" value={format(totals.spend)} color="white" />
         <KPIBox label="Résultats" value={totals.results.toLocaleString()} color="purple" />
         <KPIBox label="Coût / Résultat" value={format(totals.results > 0 ? totals.spend / totals.results : 0, 'USD', 2)} color="emerald" />
-        <KPIBox label="CTR (%)" value={totalCtr.toFixed(2) + '%'} color="indigo" />
-        <KPIBox label="Dépense" value={format(totals.spend)} color="white" />
         <KPIBox label="Portée" value={totals.reach.toLocaleString()} color="blue" />
+        <KPIBox label="CTR (%)" value={totalCtr.toFixed(2) + '%'} color="indigo" />
         <KPIBox label="CPM" value={format(totals.impressions > 0 ? (totals.spend / totals.impressions) * 1000 : 0)} color="slate" />
       </div>
 
